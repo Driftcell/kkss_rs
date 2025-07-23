@@ -1,4 +1,4 @@
 /target
 .sqlx
 config.toml
-kkss.db
+kkss.db*
