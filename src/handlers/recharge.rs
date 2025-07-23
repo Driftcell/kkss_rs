@@ -99,7 +99,7 @@ pub async fn get_history(
     }
 }
 
-pub fn config(cfg: &mut web::ServiceConfig) {
+pub fn recharge_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/recharge")
             .route("/create-payment-intent", web::post().to(create_payment_intent))

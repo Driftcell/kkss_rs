@@ -151,7 +151,7 @@ pub async fn logout() -> Result<HttpResponse> {
     })))
 }
 
-pub fn config(cfg: &mut web::ServiceConfig) {
+pub fn auth_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/auth")
             .route("/send-code", web::post().to(send_code))

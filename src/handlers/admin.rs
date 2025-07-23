@@ -63,7 +63,7 @@ pub async fn sync_discount_codes(
     }
 }
 
-pub fn config(cfg: &mut web::ServiceConfig) {
+pub fn admin_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/admin")
             .route("/sync/orders", web::post().to(sync_orders))

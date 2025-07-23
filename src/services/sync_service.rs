@@ -1,8 +1,7 @@
-use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
 use crate::models::*;
 use crate::external::*;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppResult};
 
 #[derive(Clone)]
 pub struct SyncService {

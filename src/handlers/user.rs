@@ -103,7 +103,7 @@ pub async fn get_referrals(
     }
 }
 
-pub fn config(cfg: &mut web::ServiceConfig) {
+pub fn user_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/user")
             .route("/profile", web::get().to(get_profile))

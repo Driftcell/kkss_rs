@@ -71,7 +71,7 @@ pub async fn redeem_discount_code(
     }
 }
 
-pub fn config(cfg: &mut web::ServiceConfig) {
+pub fn discount_code_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/discount-codes")
             .route("", web::get().to(get_discount_codes))

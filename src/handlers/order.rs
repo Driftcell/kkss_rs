@@ -42,7 +42,7 @@ pub async fn get_orders(
     }
 }
 
-pub fn config(cfg: &mut web::ServiceConfig) {
+pub fn order_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/orders")
             .route("", web::get().to(get_orders))

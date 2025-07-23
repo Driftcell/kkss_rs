@@ -1,6 +1,5 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use crate::config::StripeConfig;
 use crate::error::{AppError, AppResult};
 
@@ -99,9 +98,9 @@ impl StripeService {
 
     pub fn verify_webhook_signature(
         &self,
-        payload: &str,
+        _payload: &str,
         signature: &str,
-        timestamp: i64,
+        _timestamp: i64,
     ) -> AppResult<()> {
         // 简化的webhook签名验证
         // 实际生产环境中应该使用更严格的验证逻辑

@@ -3,7 +3,7 @@ use actix_web::http;
 
 pub fn create_cors() -> Cors {
     Cors::default()
-        .allowed_origin_fn(|origin, _req_head| {
+        .allowed_origin_fn(|_, _req_head| {
             // 在生产环境中应该限制允许的域名
             true
         })

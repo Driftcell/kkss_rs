@@ -5,9 +5,9 @@ pub mod discount_code;
 pub mod recharge;
 pub mod admin;
 
-pub use auth::*;
-pub use user::*;
-pub use order::*;
-pub use discount_code::*;
-pub use recharge::*;
-pub use admin::*;
+pub use auth::auth_config;
+pub use user::user_config;
+pub use order::order_config;
+pub use discount_code::discount_code_config;
+pub use recharge::recharge_config;
+pub use admin::admin_config;

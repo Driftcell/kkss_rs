@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
-use crate::models::{RechargeRecord, RechargeStatus, SweetCashTransaction, TransactionType, CreatePaymentIntentResponse, ConfirmRechargeRequest, ConfirmRechargeResponse, RechargeRecordResponse, RechargeQuery, PaginatedResponse, PaginationParams, calculate_bonus_amount};
+use crate::models::{RechargeRecord, RechargeStatus, CreatePaymentIntentResponse, ConfirmRechargeRequest, ConfirmRechargeResponse, RechargeRecordResponse, RechargeQuery, PaginatedResponse, PaginationParams, calculate_bonus_amount};
 use crate::error::{AppError, AppResult};
-use crate::external::stripe::{StripeService, CreatePaymentIntentRequest};
+use crate::external::stripe::{StripeService};
 
 #[derive(Clone)]
 pub struct RechargeService {

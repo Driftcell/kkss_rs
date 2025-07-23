@@ -1,7 +1,6 @@
 use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
 use crate::models::*;
-use crate::utils::*;
 use crate::external::*;
 use crate::error::{AppError, AppResult};
 

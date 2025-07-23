@@ -76,12 +76,12 @@ async fn main() -> std::io::Result<()> {
             .configure(swagger_config)
             .service(
                 web::scope("/api/v1")
-                    .configure(handlers::auth::config)
-                    .configure(handlers::user::config)
-                    .configure(handlers::order::config)
-                    .configure(handlers::discount_code::config)
-                    .configure(handlers::recharge::config)
-                    .configure(handlers::admin::config)
+                    .configure(handlers::auth_config)
+                    .configure(handlers::user_config)
+                    .configure(handlers::order_config)
+                    .configure(handlers::discount_code_config)
+                    .configure(handlers::recharge_config)
+                    .configure(handlers::admin_config)
             )
     })
     .bind((config.server.host.as_str(), config.server.port))?

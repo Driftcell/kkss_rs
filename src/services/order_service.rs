@@ -1,7 +1,6 @@
 use sqlx::SqlitePool;
 use crate::models::*;
-use crate::utils::*;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppResult};
 
 #[derive(Clone)]
 pub struct OrderService {
