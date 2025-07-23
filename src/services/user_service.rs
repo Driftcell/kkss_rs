@@ -50,57 +50,62 @@ impl UserService {
     }
 
     pub async fn update_user_profile(&self, user_id: i64, request: UpdateUserRequest) -> AppResult<UserResponse> {
-        let mut update_fields = Vec::new();
-        let mut values: Vec<Box<dyn ToSql + Send + Sync>> = Vec::new();
-
+        // 验证输入
         if let Some(username) = &request.username {
             if username.len() < 2 || username.len() > 20 {
                 return Err(AppError::ValidationError("用户名长度必须在2-20字符之间".to_string()));
             }
-            update_fields.push("username = ?");
-            values.push(Box::new(username.clone()));
         }
 
-        if let Some(birthday_str) = &request.birthday {
-            let birthday = chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
-                .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?;
-            update_fields.push("birthday = ?");
-            values.push(Box::new(birthday));
-        }
+        let birthday = if let Some(birthday_str) = &request.birthday {
+            Some(chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
+                .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?)
+        } else {
+            None
+        };
 
-        if update_fields.is_empty() {
+        // 检查是否有需要更新的字段
+        if request.username.is_none() && request.birthday.is_none() {
             return Err(AppError::ValidationError("没有需要更新的字段".to_string()));
         }
 
-        update_fields.push("updated_at = CURRENT_TIMESTAMP");
-        values.push(Box::new(user_id));
-
-        let _query = format!(
-            "UPDATE users SET {} WHERE id = ?",
-            update_fields.join(", ")
-        );
-
-        // 由于sqlx的限制，这里简化处理
-        if let Some(username) = &request.username {
-            sqlx::query!(
-                "UPDATE users SET username = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                username,
-                user_id
-            )
-            .execute(&self.pool)
-            .await?;
-        }
-
-        if let Some(birthday_str) = &request.birthday {
-            let birthday = chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
-                .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?;
-            sqlx::query!(
-                "UPDATE users SET birthday = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                birthday,
-                user_id
-            )
-            .execute(&self.pool)
-            .await?;
+        // 根据提供的字段执行相应的更新
+        match (&request.username, &birthday) {
+            (Some(username), Some(birthday)) => {
+                // 同时更新用户名和生日
+                sqlx::query!(
+                    "UPDATE users SET username = ?, birthday = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    username,
+                    birthday,
+                    user_id
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+            (Some(username), None) => {
+                // 只更新用户名
+                sqlx::query!(
+                    "UPDATE users SET username = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    username,
+                    user_id
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+            (None, Some(birthday)) => {
+                // 只更新生日
+                sqlx::query!(
+                    "UPDATE users SET birthday = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    birthday,
+                    user_id
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+            (None, None) => {
+                // 这种情况已经在上面检查过了，但为了完整性保留
+                return Err(AppError::ValidationError("没有需要更新的字段".to_string()));
+            }
         }
 
         // 返回更新后的用户信息
@@ -183,12 +188,3 @@ impl UserService {
         })
     }
 }
-
-// 简化的ToSql trait，实际应该使用sqlx的ToSql
-trait ToSql {
-    // 简化实现
-}
-
-impl ToSql for String {}
-impl ToSql for chrono::NaiveDate {}
-impl ToSql for i64 {}
