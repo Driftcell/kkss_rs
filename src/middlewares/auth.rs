@@ -7,13 +7,62 @@ use std::future::{ready, Ready};
 use crate::utils::JwtService;
 use crate::error::AppError;
 
+// 公开路径配置
+struct PublicPaths {
+    exact_paths: Vec<&'static str>,
+    prefix_paths: Vec<&'static str>,
+    excluded_paths: Vec<&'static str>, // 需要认证的特殊路径
+}
+
+impl PublicPaths {
+    fn new() -> Self {
+        Self {
+            // 完全匹配的公开路径
+            exact_paths: vec![
+                "/swagger-ui",
+                "/swagger-ui/",
+                "/api-docs/openapi.json",
+            ],
+            // 前缀匹配的公开路径
+            prefix_paths: vec![
+                "/swagger-ui/",
+                "/api-docs/",
+                "/api/v1/auth/",
+                "/admin/", // 添加admin路径为公开访问
+            ],
+            // 需要排除的路径（即使在公开前缀下也需要认证）
+            excluded_paths: vec![
+                "/api/v1/auth/refresh",
+                "/api/v1/auth/logout",
+            ],
+        }
+    }
+
+    fn is_public_path(&self, path: &str) -> bool {
+        // 首先检查是否在排除列表中
+        if self.excluded_paths.iter().any(|&excluded| path.starts_with(excluded)) {
+            return false;
+        }
+
+        // 检查完全匹配
+        if self.exact_paths.contains(&path) {
+            return true;
+        }
+
+        // 检查前缀匹配
+        self.prefix_paths.iter().any(|&prefix| path.starts_with(prefix))
+    }
+}
+
 pub struct AuthMiddleware {
     jwt_service: JwtService,
 }
 
 impl AuthMiddleware {
     pub fn new(jwt_service: JwtService) -> Self {
-        Self { jwt_service }
+        Self { 
+            jwt_service,
+        }
     }
 }
 
@@ -33,6 +82,7 @@ where
         ready(Ok(AuthMiddlewareService {
             service,
             jwt_service: self.jwt_service.clone(),
+            public_paths: PublicPaths::new(),
         }))
     }
 }
@@ -40,6 +90,7 @@ where
 pub struct AuthMiddlewareService<S> {
     service: S,
     jwt_service: JwtService,
+    public_paths: PublicPaths,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthMiddlewareService<S>
@@ -55,29 +106,10 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // 跳过不需要认证的路径
+        // 检查是否为公开路径
         let path = req.path();
-        let is_public_path = 
-            // 认证相关路径（除了refresh和logout）
-            (path.starts_with("/api/v1/auth/") && !path.contains("/refresh") && !path.contains("/logout"))
-            // Swagger UI 相关路径 - 更宽松的匹配
-            || path.starts_with("/swagger-ui")
-            || path == "/swagger-ui"
-            || path == "/swagger-ui/"
-            || path.starts_with("/api-docs")
-            || path == "/api-docs/openapi.json"
-            // 静态资源
-            || path.ends_with(".css")
-            || path.ends_with(".js")
-            || path.ends_with(".png")
-            || path.ends_with(".ico")
-            || path.ends_with(".html")
-            || path.ends_with(".woff")
-            || path.ends_with(".woff2")
-            || path.ends_with(".ttf")
-            || path.ends_with(".svg");
-            
-        if is_public_path {
+        
+        if self.public_paths.is_public_path(path) {
             let fut = self.service.call(req);
             return Box::pin(async move { fut.await });
         }
