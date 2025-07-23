@@ -1,0 +1,26 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[database]
+url = "sqlite://./kkss.db"
+max_connections = 10
+
+[jwt]
+secret = "your-super-secret-jwt-key-change-this-in-production"
+access_token_expires_in = 7200  # 2 hours
+refresh_token_expires_in = 2592000  # 30 days
+
+[twilio]
+account_sid = "your-twilio-account-sid"
+auth_token = "your-twilio-auth-token"
+from_phone = "+1234567890"
+
+[stripe]
+secret_key = "sk_test_your-stripe-secret-key"
+webhook_secret = "whsec_your-webhook-secret"
+
+[sevencloud]
+username = "your-sevencloud-username"
+password = "your-sevencloud-password"
+base_url = "https://sz.sunzee.com.cn"
