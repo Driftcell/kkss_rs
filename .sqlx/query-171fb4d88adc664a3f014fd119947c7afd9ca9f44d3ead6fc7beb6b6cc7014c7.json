@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sweet_cash FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "sweet_cash",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "171fb4d88adc664a3f014fd119947c7afd9ca9f44d3ead6fc7beb6b6cc7014c7"
+}

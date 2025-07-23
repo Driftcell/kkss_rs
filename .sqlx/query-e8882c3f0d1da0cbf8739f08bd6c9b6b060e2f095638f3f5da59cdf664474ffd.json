@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT balance FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "balance",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "e8882c3f0d1da0cbf8739f08bd6c9b6b060e2f095638f3f5da59cdf664474ffd"
+}

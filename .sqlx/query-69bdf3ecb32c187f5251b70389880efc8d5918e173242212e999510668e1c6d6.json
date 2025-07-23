@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id, user_id, code, discount_amount,\n                code_type as \"code_type: CodeType\",\n                is_used, used_at, expires_at, external_id,\n                created_at, updated_at\n            FROM discount_codes\n            WHERE user_id = ?\n            ORDER BY created_at DESC\n            LIMIT ? OFFSET ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "code",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "discount_amount",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "code_type: CodeType",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_used",
+        "ordinal": 5,
+        "type_info": "Bool"
+      },
+      {
+        "name": "used_at",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 7,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "external_id",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 9,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 10,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "69bdf3ecb32c187f5251b70389880efc8d5918e173242212e999510668e1c6d6"
+}

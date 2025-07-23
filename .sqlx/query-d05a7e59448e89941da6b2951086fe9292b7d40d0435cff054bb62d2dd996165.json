@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT COUNT(*) as count \n            FROM discount_codes \n            WHERE user_id = ? AND is_used = FALSE AND expires_at > datetime('now')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "count",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d05a7e59448e89941da6b2951086fe9292b7d40d0435cff054bb62d2dd996165"
+}

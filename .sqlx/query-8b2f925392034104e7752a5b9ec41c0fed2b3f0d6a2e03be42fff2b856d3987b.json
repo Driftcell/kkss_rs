@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id, user_id, stripe_payment_intent_id, amount, bonus_amount,\n                total_amount, status as \"status: RechargeStatus\",\n                stripe_status, created_at, updated_at\n            FROM recharge_records\n            WHERE user_id = ?\n            ORDER BY created_at DESC\n            LIMIT ? OFFSET ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "stripe_payment_intent_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "amount",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "bonus_amount",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_amount",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "status: RechargeStatus",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "stripe_status",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 8,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 9,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8b2f925392034104e7752a5b9ec41c0fed2b3f0d6a2e03be42fff2b856d3987b"
+}

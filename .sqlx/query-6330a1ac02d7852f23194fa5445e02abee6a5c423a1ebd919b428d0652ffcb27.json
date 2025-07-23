@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                COUNT(*) as total_orders,\n                COALESCE(SUM(price), 0) as total_spent,\n                COALESCE(SUM(sweet_cash_earned), 0) as total_earned_sweet_cash\n            FROM orders \n            WHERE user_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "total_orders",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_spent",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_earned_sweet_cash",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6330a1ac02d7852f23194fa5445e02abee6a5c423a1ebd919b428d0652ffcb27"
+}

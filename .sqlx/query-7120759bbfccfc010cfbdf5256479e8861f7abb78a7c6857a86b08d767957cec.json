@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET sweet_cash = sweet_cash - ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "7120759bbfccfc010cfbdf5256479e8861f7abb78a7c6857a86b08d767957cec"
+}

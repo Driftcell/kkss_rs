@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e0df0b5d6237a2eb5ae797db20b8b7a1d7d85d9c9acad8ccad5ec9ab0cbb8fb9"
+}
