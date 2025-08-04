@@ -69,12 +69,8 @@ impl TwilioService {
     }
 }
 
-/// 生成6位数字验证码
-pub fn generate_verification_code() -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    format!("{:06}", rng.gen_range(100000..=999999))
-}
+// 导出generate_six_digit_code以保持向后兼容
+pub use crate::utils::generate_six_digit_code as generate_verification_code;
 
 #[cfg(test)]
 mod tests {
@@ -84,6 +80,10 @@ mod tests {
     fn test_generate_verification_code() {
         let code = generate_verification_code();
         assert_eq!(code.len(), 6);
-        assert!(code.chars().all(|c| c.is_digit(10)));
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+        
+        // 确保代码在有效范围内
+        let code_num: u32 = code.parse().unwrap();
+        assert!(code_num >= 100000 && code_num <= 999999);
     }
 }

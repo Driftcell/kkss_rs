@@ -51,6 +51,7 @@ async fn main() -> std::io::Result<()> {
         pool.clone(),
         jwt_service.clone(),
         twilio_service,
+        sevencloud_api.clone(),
     );
     
     let user_service = UserService::new(pool.clone());

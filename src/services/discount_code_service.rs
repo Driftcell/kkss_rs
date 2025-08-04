@@ -2,6 +2,7 @@ use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
 use crate::models::*;
 use crate::external::*;
+use crate::utils::generate_six_digit_code;
 use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
@@ -91,7 +92,7 @@ impl DiscountCodeService {
         .await?;
 
         // 生成优惠码
-        let code = generate_verification_code(); // 生成6位数字码
+        let code = generate_six_digit_code(); // 生成6位数字码
         let expires_at = Utc::now() + Duration::days(30 * request.expire_months as i64);
         let discount_dollars = request.discount_amount as f64 / 100.0;
 

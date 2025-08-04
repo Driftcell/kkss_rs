@@ -46,6 +46,33 @@ pub async fn generate_unique_referral_code(pool: &SqlitePool) -> AppResult<Strin
     }
 }
 
+/// 生成唯一的优惠码
+pub async fn generate_unique_discount_code(pool: &SqlitePool) -> AppResult<String> {
+    let mut rng = rand::thread_rng();
+    
+    loop {
+        // 生成8位字母数字组合的优惠码
+        let code: String = (0..8)
+            .map(|_| {
+                let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                chars[rng.gen_range(0..chars.len())] as char
+            })
+            .collect();
+        
+        // 检查是否已存在
+        let exists = sqlx::query!(
+            "SELECT COUNT(*) as count FROM discount_codes WHERE code = ?",
+            code
+        )
+        .fetch_one(pool)
+        .await?;
+        
+        if exists.count == 0 {
+            return Ok(code);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,6 +115,42 @@ mod tests {
         
         // 生成另一个推荐码，应该与第一个不同
         let code2 = generate_unique_referral_code(&pool).await.unwrap();
+        assert_ne!(code, code2);
+    }
+
+    #[tokio::test]
+    async fn test_generate_unique_discount_code() {
+        // 使用内存数据库进行测试
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        
+        // 创建测试优惠码表
+        sqlx::query!(
+            r#"
+            CREATE TABLE IF NOT EXISTS discount_codes (
+                id INTEGER PRIMARY KEY,
+                code TEXT UNIQUE
+            )
+            "#
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let code = generate_unique_discount_code(&pool).await.unwrap();
+        assert_eq!(code.len(), 8);
+        assert!(code.chars().all(|c| c.is_ascii_alphanumeric() && c.is_ascii_uppercase() || c.is_ascii_digit()));
+        
+        // 插入一个优惠码到数据库
+        sqlx::query!(
+            "INSERT INTO discount_codes (code) VALUES (?)",
+            code
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        
+        // 生成另一个优惠码，应该与第一个不同
+        let code2 = generate_unique_discount_code(&pool).await.unwrap();
         assert_ne!(code, code2);
     }
 }

@@ -1,5 +1,7 @@
 use chrono::{Duration, Utc, DateTime};
 use sqlx::SqlitePool;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use crate::models::*;
 use crate::utils::*;
 use crate::external::*;
@@ -10,6 +12,7 @@ pub struct AuthService {
     pool: SqlitePool,
     jwt_service: JwtService,
     twilio_service: TwilioService,
+    sevencloud_api: Arc<Mutex<SevenCloudAPI>>,
 }
 
 impl AuthService {
@@ -17,11 +20,13 @@ impl AuthService {
         pool: SqlitePool,
         jwt_service: JwtService,
         twilio_service: TwilioService,
+        sevencloud_api: Arc<Mutex<SevenCloudAPI>>,
     ) -> Self {
         Self {
             pool,
             jwt_service,
             twilio_service,
+            sevencloud_api,
         }
     }
 
@@ -51,7 +56,7 @@ impl AuthService {
         }
 
         // 生成验证码
-        let code = generate_verification_code();
+        let code = generate_six_digit_code();
         let expires_at = Utc::now() + Duration::minutes(5);
 
         // 发送短信
@@ -293,48 +298,21 @@ impl AuthService {
         user.ok_or_else(|| AppError::NotFound("用户不存在".to_string()))
     }
 
-    async fn create_welcome_discount_code(&self, user_id: i64, amount: i64) -> AppResult<()> {
-        let code = generate_verification_code(); // 重用验证码生成函数
-        let expires_at = Utc::now() + Duration::days(365); // 1年有效期
-
-        let code_type_str = CodeType::Welcome.to_string();
-        sqlx::query!(
-            r#"
-            INSERT INTO discount_codes (
-                user_id, code, discount_amount, code_type, expires_at
-            ) VALUES (?, ?, ?, ?, ?)
-            "#,
-            user_id,
-            code,
-            amount,
-            code_type_str,
-            expires_at
-        )
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    async fn create_referral_discount_code(&self, user_id: i64, amount: i64) -> AppResult<()> {
-        let code = generate_verification_code(); // 重用验证码生成函数
-        let expires_at = Utc::now() + Duration::days(365); // 1年有效期
-
-        let code_type_str = CodeType::Referral.to_string();
-        sqlx::query!(
-            r#"
-            INSERT INTO discount_codes (
-                user_id, code, discount_amount, code_type, expires_at
-            ) VALUES (?, ?, ?, ?, ?)
-            "#,
-            user_id,
-            code,
-            amount,
-            code_type_str,
-            expires_at
-        )
-        .execute(&self.pool)
-        .await?;
+    async fn create_referral_discount_code(&self, _user_id: i64, amount: i64) -> AppResult<()> {
+        // 生成6位数字优惠码
+        let code = generate_six_digit_code();
+        
+        // 将美分转换为美元
+        let discount_dollars = amount as f64 / 100.0;
+        
+        // 使用SevenCloud API生成优惠码
+        let mut api = self.sevencloud_api.lock().await;
+        
+        // 先尝试登录
+        api.login().await?;
+        
+        // 生成优惠码，有效期3个月
+        api.generate_discount_code(&code, discount_dollars, 3).await?;
 
         Ok(())
     }
