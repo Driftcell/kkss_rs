@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc, NaiveDateTime};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -28,12 +28,12 @@ pub struct DiscountCode {
     pub id: Option<i64>,
     pub user_id: Option<i64>,
     pub code: String,
-    pub discount_amount: Option<i64>,  // 优惠金额(美分)
+    pub discount_amount: Option<i64>, // 优惠金额(美分)
     pub code_type: CodeType,
     pub is_used: Option<bool>,
     pub used_at: Option<NaiveDateTime>,
     pub expires_at: Option<NaiveDateTime>,
-    pub external_id: Option<i64>,  // 七云优惠码ID
+    pub external_id: Option<i64>, // 七云优惠码ID
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
 }
@@ -53,14 +53,14 @@ pub struct DiscountCodeResponse {
 pub struct DiscountCodeQuery {
     pub page: Option<u32>,
     pub per_page: Option<u32>,
-    pub status: Option<String>,  // available/used/expired
-    pub code_type: Option<String>,  // welcome/referral/purchase_reward/redeemed
+    pub status: Option<String>,    // available/used/expired
+    pub code_type: Option<String>, // welcome/referral/purchase_reward/redeemed
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RedeemDiscountCodeRequest {
-    pub discount_amount: i64,  // 要兑换的优惠码金额(美分)
-    pub expire_months: u32,    // 有效期(月)，1-3
+    pub discount_amount: i64, // 要兑换的优惠码金额(美分)
+    pub expire_months: u32,   // 有效期(月)，1-3
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -78,8 +78,14 @@ impl From<DiscountCode> for DiscountCodeResponse {
             discount_amount: code.discount_amount.unwrap_or(0),
             code_type: code.code_type,
             is_used: code.is_used.unwrap_or(false),
-            expires_at: code.expires_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
-            created_at: code.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+            expires_at: code
+                .expires_at
+                .map(|dt| dt.and_utc())
+                .unwrap_or_else(|| Utc::now()),
+            created_at: code
+                .created_at
+                .map(|dt| dt.and_utc())
+                .unwrap_or_else(|| Utc::now()),
         }
     }
 }

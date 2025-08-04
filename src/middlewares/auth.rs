@@ -1,11 +1,11 @@
+use crate::error::AppError;
+use crate::utils::JwtService;
 use actix_web::{
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage,
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
 };
 use futures_util::future::LocalBoxFuture;
-use std::future::{ready, Ready};
-use crate::utils::JwtService;
-use crate::error::AppError;
+use std::future::{Ready, ready};
 
 // 公开路径配置
 struct PublicPaths {
@@ -18,11 +18,7 @@ impl PublicPaths {
     fn new() -> Self {
         Self {
             // 完全匹配的公开路径
-            exact_paths: vec![
-                "/swagger-ui",
-                "/swagger-ui/",
-                "/api-docs/openapi.json",
-            ],
+            exact_paths: vec!["/swagger-ui", "/swagger-ui/", "/api-docs/openapi.json"],
             // 前缀匹配的公开路径
             prefix_paths: vec![
                 "/swagger-ui/",
@@ -31,16 +27,17 @@ impl PublicPaths {
                 "/api/v1/admin/", // 添加admin路径为公开访问
             ],
             // 需要排除的路径（即使在公开前缀下也需要认证）
-            excluded_paths: vec![
-                "/api/v1/auth/refresh",
-                "/api/v1/auth/logout",
-            ],
+            excluded_paths: vec!["/api/v1/auth/refresh", "/api/v1/auth/logout"],
         }
     }
 
     fn is_public_path(&self, path: &str) -> bool {
         // 首先检查是否在排除列表中
-        if self.excluded_paths.iter().any(|&excluded| path.starts_with(excluded)) {
+        if self
+            .excluded_paths
+            .iter()
+            .any(|&excluded| path.starts_with(excluded))
+        {
             return false;
         }
 
@@ -50,7 +47,9 @@ impl PublicPaths {
         }
 
         // 检查前缀匹配
-        self.prefix_paths.iter().any(|&prefix| path.starts_with(prefix))
+        self.prefix_paths
+            .iter()
+            .any(|&prefix| path.starts_with(prefix))
     }
 }
 
@@ -60,9 +59,7 @@ pub struct AuthMiddleware {
 
 impl AuthMiddleware {
     pub fn new(jwt_service: JwtService) -> Self {
-        Self { 
-            jwt_service,
-        }
+        Self { jwt_service }
     }
 }
 
@@ -108,7 +105,7 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         // 检查是否为公开路径
         let path = req.path();
-        
+
         if self.public_paths.is_public_path(path) {
             let fut = self.service.call(req);
             return Box::pin(async move { fut.await });
@@ -116,7 +113,7 @@ where
 
         // 提取Authorization header
         let auth_header = req.headers().get("Authorization");
-        
+
         let token = if let Some(auth_value) = auth_header {
             if let Ok(auth_str) = auth_value.to_str() {
                 if auth_str.starts_with("Bearer ") {
@@ -132,27 +129,24 @@ where
         };
 
         let jwt_service = self.jwt_service.clone();
-        
+
         if let Some(token) = token {
             match jwt_service.verify_access_token(token) {
                 Ok(claims) => {
                     // 将用户ID添加到请求扩展中
-                    req.extensions_mut().insert(claims.sub.parse::<i64>().unwrap_or(0));
+                    req.extensions_mut()
+                        .insert(claims.sub.parse::<i64>().unwrap_or(0));
                     let fut = self.service.call(req);
                     Box::pin(async move { fut.await })
                 }
                 Err(_) => {
                     let error = AppError::AuthError("无效的访问令牌".to_string());
-                    Box::pin(async move { 
-                        Err(error.into()) 
-                    })
+                    Box::pin(async move { Err(error.into()) })
                 }
             }
         } else {
             let error = AppError::AuthError("缺少访问令牌".to_string());
-            Box::pin(async move { 
-                Err(error.into()) 
-            })
+            Box::pin(async move { Err(error.into()) })
         }
     }
 }

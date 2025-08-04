@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -34,8 +34,8 @@ pub struct User {
     pub password_hash: String,
     pub birthday: NaiveDate,
     pub member_type: MemberType,
-    pub balance: Option<i64>,  // 余额(美分)
-    pub sweet_cash: Option<i64>,  // 甜品现金(美分)
+    pub balance: Option<i64>,    // 余额(美分)
+    pub sweet_cash: Option<i64>, // 甜品现金(美分)
     pub referrer_id: Option<i64>,
     pub referral_code: Option<String>,
     pub created_at: Option<NaiveDateTime>,
@@ -53,7 +53,7 @@ pub struct CreateUserRequest {
     #[schema(example = "password123")]
     pub password: String,
     #[schema(example = "1990-01-01")]
-    pub birthday: String,  // YYYY-MM-DD
+    pub birthday: String, // YYYY-MM-DD
     #[schema(example = "REF123")]
     pub referrer_code: Option<String>,
 }
@@ -130,7 +130,10 @@ impl From<User> for UserResponse {
             sweet_cash: user.sweet_cash.unwrap_or(0),
             referral_code: user.referral_code,
             total_referrals: 0, // 需要单独查询
-            created_at: user.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+            created_at: user
+                .created_at
+                .map(|dt| dt.and_utc())
+                .unwrap_or_else(|| Utc::now()),
         }
     }
 }

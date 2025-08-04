@@ -1,7 +1,7 @@
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use crate::config::TwilioConfig;
 use crate::error::{AppError, AppResult};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SendSmsRequest {
@@ -49,7 +49,8 @@ impl TwilioService {
             ("Body", &body),
         ];
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .basic_auth(&self.config.account_sid, Some(&self.config.auth_token))
             .form(&params)
@@ -60,11 +61,15 @@ impl TwilioService {
             log::info!("验证码短信发送成功: {}", phone);
             Ok(())
         } else {
-            let error_text = response.text().await.unwrap_or_else(|_| "未知错误".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "未知错误".to_string());
             log::error!("验证码短信发送失败: {}, 错误: {}", phone, error_text);
-            Err(AppError::ExternalApiError(
-                format!("短信发送失败: {}", error_text)
-            ))
+            Err(AppError::ExternalApiError(format!(
+                "短信发送失败: {}",
+                error_text
+            )))
         }
     }
 }
@@ -81,7 +86,7 @@ mod tests {
         let code = generate_verification_code();
         assert_eq!(code.len(), 6);
         assert!(code.chars().all(|c| c.is_ascii_digit()));
-        
+
         // 确保代码在有效范围内
         let code_num: u32 = code.parse().unwrap();
         assert!(code_num >= 100000 && code_num <= 999999);

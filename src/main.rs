@@ -1,4 +1,4 @@
-use actix_web::{middleware::Logger, web, App, HttpServer};
+use actix_web::{App, HttpServer, middleware::Logger, web};
 use env_logger::Env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -6,12 +6,12 @@ use tokio::sync::Mutex;
 use kkss_backend::{
     config::Config,
     database::{create_pool, run_migrations},
-    external::{SevenCloudAPI, TwilioService, StripeService},
-    services::*,
+    external::{SevenCloudAPI, StripeService, TwilioService},
     handlers,
-    middlewares::{create_cors, AuthMiddleware},
-    utils::JwtService,
+    middlewares::{AuthMiddleware, create_cors},
+    services::*,
     swagger::swagger_config,
+    utils::JwtService,
 };
 
 #[actix_web::main]
@@ -20,14 +20,14 @@ async fn main() -> std::io::Result<()> {
 
     // 加载配置
     let config = Config::from_toml().expect("无法加载配置文件");
-    
+
     // 创建数据库连接池
-    let pool = create_pool(&config.database).await
+    let pool = create_pool(&config.database)
+        .await
         .expect("无法创建数据库连接池");
-    
+
     // 运行数据库迁移
-    run_migrations(&pool).await
-        .expect("无法运行数据库迁移");
+    run_migrations(&pool).await.expect("无法运行数据库迁移");
 
     // 创建JWT服务
     let jwt_service = JwtService::new(
@@ -39,7 +39,7 @@ async fn main() -> std::io::Result<()> {
     // 创建外部服务
     let twilio_service = TwilioService::new(config.twilio.clone());
     let stripe_service = StripeService::new(config.stripe.clone());
-    
+
     let mut sevencloud_api = SevenCloudAPI::new(config.sevencloud.clone());
     if let Err(e) = sevencloud_api.login().await {
         log::error!("七云API登录失败: {:?}", e);
@@ -53,7 +53,7 @@ async fn main() -> std::io::Result<()> {
         twilio_service,
         sevencloud_api.clone(),
     );
-    
+
     let user_service = UserService::new(pool.clone());
     let order_service = OrderService::new(pool.clone());
     let discount_code_service = DiscountCodeService::new(pool.clone(), sevencloud_api.clone());
@@ -62,7 +62,7 @@ async fn main() -> std::io::Result<()> {
 
     // 启动HTTP服务器
     log::info!("服务器启动在 {}:{}", config.server.host, config.server.port);
-    
+
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
@@ -82,7 +82,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(handlers::order_config)
                     .configure(handlers::discount_code_config)
                     .configure(handlers::recharge_config)
-                    .configure(handlers::admin_config)
+                    .configure(handlers::admin_config),
             )
     })
     .bind((config.server.host.as_str(), config.server.port))?

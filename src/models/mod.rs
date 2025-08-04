@@ -1,17 +1,17 @@
-pub mod user;
-pub mod order;
+pub mod common;
 pub mod discount_code;
+pub mod order;
+pub mod pagination;
 pub mod recharge_record;
 pub mod sweet_cash_transaction;
+pub mod user;
 pub mod verification_code;
-pub mod pagination;
-pub mod common;
 
-pub use user::*;
-pub use order::*;
+pub use common::*;
 pub use discount_code::*;
+pub use order::*;
+pub use pagination::*;
 pub use recharge_record::*;
 pub use sweet_cash_transaction::*;
+pub use user::*;
 pub use verification_code::*;
-pub use pagination::*;
-pub use common::*;

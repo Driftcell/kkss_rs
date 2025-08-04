@@ -1,15 +1,15 @@
-use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, Algorithm};
-use serde::{Deserialize, Serialize};
 use crate::error::{AppError, AppResult};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,  // user_id
+    pub sub: String, // user_id
     pub member_code: String,
     pub exp: i64,
     pub iat: i64,
-    pub token_type: String,  // "access" or "refresh"
+    pub token_type: String, // "access" or "refresh"
 }
 
 #[derive(Clone)]
@@ -33,7 +33,7 @@ impl JwtService {
     pub fn generate_access_token(&self, user_id: i64, member_code: &str) -> AppResult<String> {
         let now = Utc::now();
         let exp = now + Duration::seconds(self.access_token_expires_in);
-        
+
         let claims = Claims {
             sub: user_id.to_string(),
             member_code: member_code.to_string(),
@@ -42,14 +42,13 @@ impl JwtService {
             token_type: "access".to_string(),
         };
 
-        encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|e| AppError::JwtError(e))
+        encode(&Header::default(), &claims, &self.encoding_key).map_err(|e| AppError::JwtError(e))
     }
 
     pub fn generate_refresh_token(&self, user_id: i64, member_code: &str) -> AppResult<String> {
         let now = Utc::now();
         let exp = now + Duration::seconds(self.refresh_token_expires_in);
-        
+
         let claims = Claims {
             sub: user_id.to_string(),
             member_code: member_code.to_string(),
@@ -58,8 +57,7 @@ impl JwtService {
             token_type: "refresh".to_string(),
         };
 
-        encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|e| AppError::JwtError(e))
+        encode(&Header::default(), &claims, &self.encoding_key).map_err(|e| AppError::JwtError(e))
     }
 
     pub fn verify_token(&self, token: &str) -> AppResult<Claims> {
@@ -71,21 +69,21 @@ impl JwtService {
 
     pub fn verify_access_token(&self, token: &str) -> AppResult<Claims> {
         let claims = self.verify_token(token)?;
-        
+
         if claims.token_type != "access" {
             return Err(AppError::AuthError("无效的访问令牌类型".to_string()));
         }
-        
+
         Ok(claims)
     }
 
     pub fn verify_refresh_token(&self, token: &str) -> AppResult<Claims> {
         let claims = self.verify_token(token)?;
-        
+
         if claims.token_type != "refresh" {
             return Err(AppError::AuthError("无效的刷新令牌类型".to_string()));
         }
-        
+
         Ok(claims)
     }
 

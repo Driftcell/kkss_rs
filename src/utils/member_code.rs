@@ -1,15 +1,15 @@
+use crate::error::AppResult;
 use rand::Rng;
 use sqlx::SqlitePool;
-use crate::error::AppResult;
 
 /// 生成唯一的10位会员号
 pub async fn generate_unique_member_code(pool: &SqlitePool) -> AppResult<String> {
     let mut rng = rand::thread_rng();
-    
+
     loop {
         // 生成1000000001到9999999999之间的数字
         let member_code = rng.gen_range(1000000001_u64..=9999999999_u64).to_string();
-        
+
         // 检查是否已存在
         let exists = sqlx::query!(
             "SELECT COUNT(*) as count FROM users WHERE member_code = ?",
@@ -17,7 +17,7 @@ pub async fn generate_unique_member_code(pool: &SqlitePool) -> AppResult<String>
         )
         .fetch_one(pool)
         .await?;
-        
+
         if exists.count == 0 {
             return Ok(member_code);
         }
@@ -27,11 +27,11 @@ pub async fn generate_unique_member_code(pool: &SqlitePool) -> AppResult<String>
 /// 生成唯一的六位数字推荐码
 pub async fn generate_unique_referral_code(pool: &SqlitePool) -> AppResult<String> {
     let mut rng = rand::thread_rng();
-    
+
     loop {
         // 生成100000到999999之间的六位数字
         let referral_code = rng.gen_range(100000_u32..=999999_u32).to_string();
-        
+
         // 检查是否已存在
         let exists = sqlx::query!(
             "SELECT COUNT(*) as count FROM users WHERE referral_code = ?",
@@ -39,7 +39,7 @@ pub async fn generate_unique_referral_code(pool: &SqlitePool) -> AppResult<Strin
         )
         .fetch_one(pool)
         .await?;
-        
+
         if exists.count == 0 {
             return Ok(referral_code);
         }
@@ -49,7 +49,7 @@ pub async fn generate_unique_referral_code(pool: &SqlitePool) -> AppResult<Strin
 /// 生成唯一的优惠码
 pub async fn generate_unique_discount_code(pool: &SqlitePool) -> AppResult<String> {
     let mut rng = rand::thread_rng();
-    
+
     loop {
         // 生成8位字母数字组合的优惠码
         let code: String = (0..8)
@@ -58,7 +58,7 @@ pub async fn generate_unique_discount_code(pool: &SqlitePool) -> AppResult<Strin
                 chars[rng.gen_range(0..chars.len())] as char
             })
             .collect();
-        
+
         // 检查是否已存在
         let exists = sqlx::query!(
             "SELECT COUNT(*) as count FROM discount_codes WHERE code = ?",
@@ -66,7 +66,7 @@ pub async fn generate_unique_discount_code(pool: &SqlitePool) -> AppResult<Strin
         )
         .fetch_one(pool)
         .await?;
-        
+
         if exists.count == 0 {
             return Ok(code);
         }
@@ -82,7 +82,7 @@ mod tests {
     async fn test_generate_unique_referral_code() {
         // 使用内存数据库进行测试
         let pool = SqlitePool::connect(":memory:").await.unwrap();
-        
+
         // 创建测试用户表
         sqlx::query!(
             r#"
@@ -99,20 +99,17 @@ mod tests {
         let code = generate_unique_referral_code(&pool).await.unwrap();
         assert_eq!(code.len(), 6);
         assert!(code.chars().all(|c| c.is_ascii_digit()));
-        
+
         // 确保代码在有效范围内
         let code_num: u32 = code.parse().unwrap();
         assert!(code_num >= 100000 && code_num <= 999999);
-        
+
         // 插入一个推荐码到数据库
-        sqlx::query!(
-            "INSERT INTO users (referral_code) VALUES (?)",
-            code
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        
+        sqlx::query!("INSERT INTO users (referral_code) VALUES (?)", code)
+            .execute(&pool)
+            .await
+            .unwrap();
+
         // 生成另一个推荐码，应该与第一个不同
         let code2 = generate_unique_referral_code(&pool).await.unwrap();
         assert_ne!(code, code2);
@@ -122,7 +119,7 @@ mod tests {
     async fn test_generate_unique_discount_code() {
         // 使用内存数据库进行测试
         let pool = SqlitePool::connect(":memory:").await.unwrap();
-        
+
         // 创建测试优惠码表
         sqlx::query!(
             r#"
@@ -138,17 +135,17 @@ mod tests {
 
         let code = generate_unique_discount_code(&pool).await.unwrap();
         assert_eq!(code.len(), 8);
-        assert!(code.chars().all(|c| c.is_ascii_alphanumeric() && c.is_ascii_uppercase() || c.is_ascii_digit()));
-        
+        assert!(
+            code.chars()
+                .all(|c| c.is_ascii_alphanumeric() && c.is_ascii_uppercase() || c.is_ascii_digit())
+        );
+
         // 插入一个优惠码到数据库
-        sqlx::query!(
-            "INSERT INTO discount_codes (code) VALUES (?)",
-            code
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        
+        sqlx::query!("INSERT INTO discount_codes (code) VALUES (?)", code)
+            .execute(&pool)
+            .await
+            .unwrap();
+
         // 生成另一个优惠码，应该与第一个不同
         let code2 = generate_unique_discount_code(&pool).await.unwrap();
         assert_ne!(code, code2);

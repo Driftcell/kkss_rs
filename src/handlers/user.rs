@@ -1,8 +1,8 @@
-use actix_web::{web, HttpRequest, HttpResponse, Result, ResponseError, HttpMessage};
-use serde_json::json;
-use crate::models::*;
 use crate::models::pagination::PaginationParams;
+use crate::models::*;
 use crate::services::UserService;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, Result, web};
+use serde_json::json;
 
 fn get_user_id_from_request(req: &HttpRequest) -> Option<i64> {
     req.extensions().get::<i64>().copied()
@@ -26,7 +26,7 @@ pub async fn get_profile(
     req: HttpRequest,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
+
     match user_service.get_user_profile(user_id).await {
         Ok((user, statistics)) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
@@ -59,8 +59,11 @@ pub async fn update_profile(
     request: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
-    match user_service.update_user_profile(user_id, request.into_inner()).await {
+
+    match user_service
+        .update_user_profile(user_id, request.into_inner())
+        .await
+    {
         Ok(user) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
             "data": {
@@ -93,8 +96,11 @@ pub async fn get_referrals(
     query: web::Query<PaginationParams>,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
-    match user_service.get_user_referrals(user_id, &query.into_inner()).await {
+
+    match user_service
+        .get_user_referrals(user_id, &query.into_inner())
+        .await
+    {
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
             "data": response
@@ -108,6 +114,6 @@ pub fn user_config(cfg: &mut web::ServiceConfig) {
         web::scope("/user")
             .route("/profile", web::get().to(get_profile))
             .route("/profile", web::put().to(update_profile))
-            .route("/referrals", web::get().to(get_referrals))
+            .route("/referrals", web::get().to(get_referrals)),
     );
 }

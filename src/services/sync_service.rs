@@ -1,7 +1,7 @@
-use sqlx::SqlitePool;
-use crate::models::*;
+use crate::error::AppResult;
 use crate::external::*;
-use crate::error::{AppResult};
+use crate::models::*;
+use sqlx::SqlitePool;
 
 #[derive(Clone)]
 pub struct SyncService {
@@ -10,14 +10,20 @@ pub struct SyncService {
 }
 
 impl SyncService {
-    pub fn new(pool: SqlitePool, sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>) -> Self {
-        Self { pool, sevencloud_api }
+    pub fn new(
+        pool: SqlitePool,
+        sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
+    ) -> Self {
+        Self {
+            pool,
+            sevencloud_api,
+        }
     }
 
     pub async fn sync_orders(&self, start_date: &str, end_date: &str) -> AppResult<usize> {
         let api = self.sevencloud_api.lock().await;
         let orders = api.get_orders(start_date, end_date).await?;
-        
+
         let mut processed_count = 0;
 
         for order_record in orders {
@@ -34,12 +40,9 @@ impl SyncService {
 
     async fn process_order(&self, order_record: OrderRecord) -> AppResult<()> {
         // 检查订单是否已存在
-        let existing = sqlx::query!(
-            "SELECT id FROM orders WHERE id = ?",
-            order_record.id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let existing = sqlx::query!("SELECT id FROM orders WHERE id = ?", order_record.id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         if existing.is_some() {
             log::debug!("订单已存在，跳过: {}", order_record.id);
@@ -48,12 +51,9 @@ impl SyncService {
 
         // 根据会员号查找用户
         let user = if let Some(member_code) = &order_record.member_code {
-            sqlx::query!(
-                "SELECT id FROM users WHERE member_code = ?",
-                member_code
-            )
-            .fetch_optional(&self.pool)
-            .await?
+            sqlx::query!("SELECT id FROM users WHERE member_code = ?", member_code)
+                .fetch_optional(&self.pool)
+                .await?
         } else {
             None
         };
@@ -66,8 +66,9 @@ impl SyncService {
             let mut tx = self.pool.begin().await?;
 
             // 插入订单记录
-            let created_at = chrono::DateTime::from_timestamp_millis(order_record.create_date).unwrap_or_default();
-            
+            let created_at = chrono::DateTime::from_timestamp_millis(order_record.create_date)
+                .unwrap_or_default();
+
             sqlx::query!(
                 r#"
                 INSERT INTO orders (
@@ -99,13 +100,10 @@ impl SyncService {
             .await?;
 
             // 记录甜品现金交易
-            let balance_after = sqlx::query!(
-                "SELECT sweet_cash FROM users WHERE id = ?",
-                user.id
-            )
-            .fetch_one(&mut *tx)
-            .await?
-            .sweet_cash;
+            let balance_after = sqlx::query!("SELECT sweet_cash FROM users WHERE id = ?", user.id)
+                .fetch_one(&mut *tx)
+                .await?
+                .sweet_cash;
 
             let transaction_type_str = TransactionType::Earn.to_string();
             let description = format!("订单 {} 奖励", order_record.id);
@@ -131,7 +129,9 @@ impl SyncService {
 
             log::info!(
                 "处理订单成功: {}, 用户: {:?}, 甜品现金奖励: {}",
-                order_record.id, user.id, sweet_cash_earned
+                order_record.id,
+                user.id,
+                sweet_cash_earned
             );
         } else {
             log::debug!("订单无关联用户，跳过: {}", order_record.id);
@@ -143,7 +143,7 @@ impl SyncService {
     pub async fn sync_discount_codes(&self) -> AppResult<usize> {
         let api = self.sevencloud_api.lock().await;
         let coupons = api.get_discount_codes(None).await?;
-        
+
         let mut processed_count = 0;
 
         for coupon_record in coupons {

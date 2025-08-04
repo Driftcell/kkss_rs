@@ -1,11 +1,11 @@
-use bcrypt::{hash, verify, DEFAULT_COST};
 use crate::error::{AppError, AppResult};
+use bcrypt::{DEFAULT_COST, hash, verify};
 
 /// 验证密码强度
 pub fn validate_password(password: &str) -> AppResult<()> {
     if password.len() < 8 || password.len() > 128 {
         return Err(AppError::ValidationError(
-            "密码长度必须在8-128字符之间".to_string()
+            "密码长度必须在8-128字符之间".to_string(),
         ));
     }
 
@@ -15,7 +15,7 @@ pub fn validate_password(password: &str) -> AppResult<()> {
 
     if !has_lowercase || !has_uppercase || !has_digit {
         return Err(AppError::ValidationError(
-            "密码必须包含大小写字母和数字".to_string()
+            "密码必须包含大小写字母和数字".to_string(),
         ));
     }
 
@@ -30,8 +30,7 @@ pub fn hash_password(password: &str) -> AppResult<String> {
 
 /// 验证密码
 pub fn verify_password(password: &str, hash: &str) -> AppResult<bool> {
-    verify(password, hash)
-        .map_err(|e| AppError::InternalError(format!("密码验证失败: {}", e)))
+    verify(password, hash).map_err(|e| AppError::InternalError(format!("密码验证失败: {}", e)))
 }
 
 #[cfg(test)]
@@ -51,7 +50,7 @@ mod tests {
     fn test_hash_and_verify_password() {
         let password = "Password123";
         let hashed = hash_password(password).unwrap();
-        
+
         assert!(verify_password(password, &hashed).unwrap());
         assert!(!verify_password("WrongPassword", &hashed).unwrap());
     }

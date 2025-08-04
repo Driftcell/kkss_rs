@@ -1,6 +1,6 @@
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use crate::config::DatabaseConfig;
 use crate::error::AppResult;
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
 pub type DbPool = SqlitePool;
 
@@ -9,7 +9,7 @@ pub async fn create_pool(config: &DatabaseConfig) -> AppResult<DbPool> {
         .max_connections(config.max_connections)
         .connect(&config.url)
         .await?;
-    
+
     Ok(pool)
 }
 

@@ -1,7 +1,7 @@
-use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage, ResponseError};
-use serde_json::json;
 use crate::models::*;
 use crate::services::OrderService;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, Result, web};
+use serde_json::json;
 
 fn get_user_id_from_request(req: &HttpRequest) -> Option<i64> {
     req.extensions().get::<i64>().copied()
@@ -32,7 +32,7 @@ pub async fn get_orders(
     query: web::Query<OrderQuery>,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
+
     match order_service.get_user_orders(user_id, &query).await {
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
@@ -43,8 +43,5 @@ pub async fn get_orders(
 }
 
 pub fn order_config(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/orders")
-            .route("", web::get().to(get_orders))
-    );
+    cfg.service(web::scope("/orders").route("", web::get().to(get_orders)));
 }

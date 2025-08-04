@@ -15,7 +15,7 @@ mod tests {
         let code = generate_six_digit_code();
         assert_eq!(code.len(), 6);
         assert!(code.chars().all(|c| c.is_ascii_digit()));
-        
+
         // 确保代码在有效范围内
         let code_num: u32 = code.parse().unwrap();
         assert!(code_num >= 100000 && code_num <= 999999);

@@ -1,6 +1,6 @@
-use sqlx::SqlitePool;
+use crate::error::AppResult;
 use crate::models::*;
-use crate::error::{AppResult};
+use sqlx::SqlitePool;
 
 #[derive(Clone)]
 pub struct OrderService {
@@ -12,7 +12,11 @@ impl OrderService {
         Self { pool }
     }
 
-    pub async fn get_user_orders(&self, user_id: i64, query: &OrderQuery) -> AppResult<PaginatedResponse<OrderResponse>> {
+    pub async fn get_user_orders(
+        &self,
+        user_id: i64,
+        query: &OrderQuery,
+    ) -> AppResult<PaginatedResponse<OrderResponse>> {
         let params = PaginationParams::new(query.page, query.per_page);
         let offset = params.get_offset() as i64;
         let limit = params.get_limit() as i64;
@@ -69,6 +73,11 @@ impl OrderService {
 
         let items: Vec<OrderResponse> = orders.into_iter().map(OrderResponse::from).collect();
 
-        Ok(PaginatedResponse::new(items, params.get_offset() / params.get_limit() + 1, params.get_limit(), total))
+        Ok(PaginatedResponse::new(
+            items,
+            params.get_offset() / params.get_limit() + 1,
+            params.get_limit(),
+            total,
+        ))
     }
 }

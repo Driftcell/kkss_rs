@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc, NaiveDateTime};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -28,9 +28,9 @@ pub struct RechargeRecord {
     pub id: Option<i64>,
     pub user_id: Option<i64>,
     pub stripe_payment_intent_id: String,
-    pub amount: Option<i64>,          // 充值金额(美分)
-    pub bonus_amount: Option<i64>,    // 奖励金额(美分)
-    pub total_amount: Option<i64>,    // 实际到账金额(美分)
+    pub amount: Option<i64>,       // 充值金额(美分)
+    pub bonus_amount: Option<i64>, // 奖励金额(美分)
+    pub total_amount: Option<i64>, // 实际到账金额(美分)
     pub status: RechargeStatus,
     pub stripe_status: Option<String>,
     pub created_at: Option<NaiveDateTime>,
@@ -39,7 +39,7 @@ pub struct RechargeRecord {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreatePaymentIntentRequest {
-    pub amount: i64,  // 充值金额(美分)，支持: 10000, 20000, 30000, 50000
+    pub amount: i64, // 充值金额(美分)，支持: 10000, 20000, 30000, 50000
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -86,7 +86,10 @@ impl From<RechargeRecord> for RechargeRecordResponse {
             bonus_amount: record.bonus_amount.unwrap_or(0),
             total_amount: record.total_amount.unwrap_or(0),
             status: record.status,
-            created_at: record.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+            created_at: record
+                .created_at
+                .map(|dt| dt.and_utc())
+                .unwrap_or_else(|| Utc::now()),
         }
     }
 }

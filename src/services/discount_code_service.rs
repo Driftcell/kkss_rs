@@ -1,9 +1,9 @@
+use crate::error::{AppError, AppResult};
+use crate::external::*;
+use crate::models::*;
+use crate::utils::generate_six_digit_code;
 use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
-use crate::models::*;
-use crate::external::*;
-use crate::utils::generate_six_digit_code;
-use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct DiscountCodeService {
@@ -12,11 +12,21 @@ pub struct DiscountCodeService {
 }
 
 impl DiscountCodeService {
-    pub fn new(pool: SqlitePool, sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>) -> Self {
-        Self { pool, sevencloud_api }
+    pub fn new(
+        pool: SqlitePool,
+        sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
+    ) -> Self {
+        Self {
+            pool,
+            sevencloud_api,
+        }
     }
 
-    pub async fn get_user_discount_codes(&self, user_id: i64, query: &DiscountCodeQuery) -> AppResult<PaginatedResponse<DiscountCodeResponse>> {
+    pub async fn get_user_discount_codes(
+        &self,
+        user_id: i64,
+        query: &DiscountCodeQuery,
+    ) -> AppResult<PaginatedResponse<DiscountCodeResponse>> {
         let params = PaginationParams::new(query.page, query.per_page);
         let offset = params.get_offset() as i64;
         let limit = params.get_limit() as i64;
@@ -51,30 +61,41 @@ impl DiscountCodeService {
         .fetch_all(&self.pool)
         .await?;
 
-        let items: Vec<DiscountCodeResponse> = discount_codes.into_iter().map(DiscountCodeResponse::from).collect();
+        let items: Vec<DiscountCodeResponse> = discount_codes
+            .into_iter()
+            .map(DiscountCodeResponse::from)
+            .collect();
 
-        Ok(PaginatedResponse::new(items, params.page.unwrap_or(1), params.page_size.unwrap_or(20), total))
+        Ok(PaginatedResponse::new(
+            items,
+            params.page.unwrap_or(1),
+            params.page_size.unwrap_or(20),
+            total,
+        ))
     }
 
-    pub async fn redeem_discount_code(&self, user_id: i64, request: RedeemDiscountCodeRequest) -> AppResult<RedeemDiscountCodeResponse> {
+    pub async fn redeem_discount_code(
+        &self,
+        user_id: i64,
+        request: RedeemDiscountCodeRequest,
+    ) -> AppResult<RedeemDiscountCodeResponse> {
         // 验证兑换金额
         let sweet_cash_needed = request.discount_amount;
-        
+
         // 验证有效期
         if request.expire_months < 1 || request.expire_months > 3 {
-            return Err(AppError::ValidationError("有效期必须在1-3个月之间".to_string()));
+            return Err(AppError::ValidationError(
+                "有效期必须在1-3个月之间".to_string(),
+            ));
         }
 
         // 开始事务
         let mut tx = self.pool.begin().await?;
 
         // 检查用户甜品现金余额
-        let user = sqlx::query!(
-            "SELECT sweet_cash FROM users WHERE id = ?",
-            user_id
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
+        let user = sqlx::query!("SELECT sweet_cash FROM users WHERE id = ?", user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
 
         let user = user.ok_or_else(|| AppError::NotFound("用户不存在".to_string()))?;
 
@@ -99,7 +120,8 @@ impl DiscountCodeService {
         // 调用七云API生成优惠码
         {
             let api = self.sevencloud_api.lock().await;
-            api.generate_discount_code(&code, discount_dollars, request.expire_months).await?;
+            api.generate_discount_code(&code, discount_dollars, request.expire_months)
+                .await?;
         }
 
         // 保存优惠码到本地数据库
@@ -125,7 +147,7 @@ impl DiscountCodeService {
         let transaction_type_str = TransactionType::Redeem.to_string();
         let negative_amount = -sweet_cash_needed;
         let description = format!("兑换{}美分优惠码", request.discount_amount);
-        
+
         sqlx::query!(
             r#"
             INSERT INTO sweet_cash_transactions (

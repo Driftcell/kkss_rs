@@ -53,13 +53,13 @@ pub struct SevenCloudConfig {
 impl Config {
     pub fn from_toml() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = env::var("CONFIG_PATH").unwrap_or_else(|_| "config.toml".to_string());
-        
+
         let config_str = std::fs::read_to_string(&config_path)
             .map_err(|e| format!("无法读取配置文件 {}: {}", config_path, e))?;
-        
-        let mut config: Config = toml::from_str(&config_str)
-            .map_err(|e| format!("解析配置文件失败: {}", e))?;
-        
+
+        let mut config: Config =
+            toml::from_str(&config_str).map_err(|e| format!("解析配置文件失败: {}", e))?;
+
         // 环境变量覆盖配置
         if let Ok(database_url) = env::var("DATABASE_URL") {
             config.database.url = database_url;
@@ -85,7 +85,7 @@ impl Config {
         if let Ok(sevencloud_password) = env::var("SEVENCLOUD_PASSWORD") {
             config.sevencloud.password = sevencloud_password;
         }
-        
+
         Ok(config)
     }
 }

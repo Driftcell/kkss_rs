@@ -1,6 +1,6 @@
-use actix_web::{web, HttpResponse, Result, ResponseError};
-use serde_json::json;
 use crate::services::SyncService;
+use actix_web::{HttpResponse, ResponseError, Result, web};
+use serde_json::json;
 
 #[utoipa::path(
     post,
@@ -19,14 +19,16 @@ pub async fn sync_orders(
     sync_service: web::Data<SyncService>,
     query: web::Query<serde_json::Value>,
 ) -> Result<HttpResponse> {
-    let start_date = query.get("start_date")
+    let start_date = query
+        .get("start_date")
         .and_then(|v| v.as_str())
         .unwrap_or("2024-01-01 00:00:00");
-    
-    let end_date = query.get("end_date")
+
+    let end_date = query
+        .get("end_date")
         .and_then(|v| v.as_str())
         .unwrap_or("2024-12-31 23:59:59");
-    
+
     match sync_service.sync_orders(start_date, end_date).await {
         Ok(count) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
@@ -48,9 +50,7 @@ pub async fn sync_orders(
         (status = 500, description = "同步失败")
     )
 )]
-pub async fn sync_discount_codes(
-    sync_service: web::Data<SyncService>,
-) -> Result<HttpResponse> {
+pub async fn sync_discount_codes(sync_service: web::Data<SyncService>) -> Result<HttpResponse> {
     match sync_service.sync_discount_codes().await {
         Ok(count) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
@@ -67,6 +67,6 @@ pub fn admin_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/admin")
             .route("/sync/orders", web::post().to(sync_orders))
-            .route("/sync/discount-codes", web::post().to(sync_discount_codes))
+            .route("/sync/discount-codes", web::post().to(sync_discount_codes)),
     );
 }

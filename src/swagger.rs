@@ -1,10 +1,13 @@
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 use actix_web::web;
-use utoipa::{Modify, openapi::security::{SecurityScheme, HttpAuthScheme, Http}};
+use utoipa::OpenApi;
+use utoipa::{
+    Modify,
+    openapi::security::{Http, HttpAuthScheme, SecurityScheme},
+};
+use utoipa_swagger_ui::SwaggerUi;
 
-use crate::models::*;
 use crate::handlers;
+use crate::models::*;
 
 struct SecurityAddon;
 
@@ -13,7 +16,7 @@ impl Modify for SecurityAddon {
         let components = openapi.components.as_mut().unwrap();
         components.add_security_scheme(
             "bearer_auth",
-            SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer))
+            SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
         )
     }
 }
@@ -99,12 +102,14 @@ pub struct ApiDoc;
 
 pub fn swagger_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        SwaggerUi::new("/swagger-ui/{_:.*}")
-            .url("/api-docs/openapi.json", ApiDoc::openapi())
+        SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ApiDoc::openapi()),
     )
-    .route("/swagger-ui", web::get().to(|| async {
-        actix_web::HttpResponse::Found()
-            .append_header(("Location", "/swagger-ui/"))
-            .finish()
-    }));
+    .route(
+        "/swagger-ui",
+        web::get().to(|| async {
+            actix_web::HttpResponse::Found()
+                .append_header(("Location", "/swagger-ui/"))
+                .finish()
+        }),
+    );
 }

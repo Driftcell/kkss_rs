@@ -1,7 +1,7 @@
-use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage, ResponseError};
-use serde_json::json;
 use crate::models::*;
 use crate::services::RechargeService;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, Result, web};
+use serde_json::json;
 
 fn get_user_id_from_request(req: &HttpRequest) -> Option<i64> {
     req.extensions().get::<i64>().copied()
@@ -27,8 +27,11 @@ pub async fn create_payment_intent(
     request: web::Json<CreatePaymentIntentRequest>,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
-    match recharge_service.create_payment_intent(user_id, request.into_inner()).await {
+
+    match recharge_service
+        .create_payment_intent(user_id, request.into_inner())
+        .await
+    {
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
             "data": response
@@ -57,8 +60,11 @@ pub async fn confirm_recharge(
     request: web::Json<ConfirmRechargeRequest>,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
-    match recharge_service.confirm_recharge(user_id, request.into_inner()).await {
+
+    match recharge_service
+        .confirm_recharge(user_id, request.into_inner())
+        .await
+    {
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
             "data": response
@@ -89,7 +95,7 @@ pub async fn get_history(
     query: web::Query<RechargeQuery>,
 ) -> Result<HttpResponse> {
     let user_id = get_user_id_from_request(&req).unwrap_or(0);
-    
+
     match recharge_service.get_recharge_history(user_id, &query).await {
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
@@ -102,8 +108,11 @@ pub async fn get_history(
 pub fn recharge_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/recharge")
-            .route("/create-payment-intent", web::post().to(create_payment_intent))
+            .route(
+                "/create-payment-intent",
+                web::post().to(create_payment_intent),
+            )
             .route("/confirm", web::post().to(confirm_recharge))
-            .route("/history", web::get().to(get_history))
+            .route("/history", web::get().to(get_history)),
     );
 }

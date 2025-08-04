@@ -23,8 +23,8 @@ pub struct SweetCashTransaction {
     pub id: i64,
     pub user_id: i64,
     pub transaction_type: TransactionType,
-    pub amount: i64,  // 交易金额(美分)
-    pub balance_after: i64,  // 交易后余额
+    pub amount: i64,        // 交易金额(美分)
+    pub balance_after: i64, // 交易后余额
     pub related_order_id: Option<i64>,
     pub related_discount_code_id: Option<i64>,
     pub description: Option<String>,

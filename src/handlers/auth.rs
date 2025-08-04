@@ -1,7 +1,7 @@
-use actix_web::{web, HttpRequest, HttpResponse, Result, ResponseError};
-use serde_json::json;
 use crate::models::*;
 use crate::services::AuthService;
+use actix_web::{HttpRequest, HttpResponse, ResponseError, Result, web};
+use serde_json::json;
 
 #[utoipa::path(
     post,
@@ -93,7 +93,7 @@ pub async fn refresh(
     req: HttpRequest,
 ) -> Result<HttpResponse> {
     let auth_header = req.headers().get("Authorization");
-    
+
     let token = if let Some(auth_value) = auth_header {
         if let Ok(auth_str) = auth_value.to_str() {
             if auth_str.starts_with("Bearer ") {
@@ -158,6 +158,6 @@ pub fn auth_config(cfg: &mut web::ServiceConfig) {
             .route("/register", web::post().to(register))
             .route("/login", web::post().to(login))
             .route("/refresh", web::post().to(refresh))
-            .route("/logout", web::post().to(logout))
+            .route("/logout", web::post().to(logout)),
     );
 }

@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use reqwest::Client;
-use std::collections::HashMap;
 use crate::config::SevenCloudConfig;
 use crate::error::{AppError, AppResult};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse<T> {
@@ -90,23 +90,20 @@ impl SevenCloudAPI {
             "password": password_hash,
         });
 
-        let response = self.client
-            .post(&url)
-            .json(&data)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&data).send().await?;
 
         let result: ApiResponse<serde_json::Value> = response.json().await?;
 
         if !result.success {
-            return Err(AppError::ExternalApiError(
-                format!("七云登录失败: {}", result.message)
-            ));
+            return Err(AppError::ExternalApiError(format!(
+                "七云登录失败: {}",
+                result.message
+            )));
         }
 
-        let data = result.data.ok_or_else(|| {
-            AppError::ExternalApiError("七云登录响应数据为空".to_string())
-        })?;
+        let data = result
+            .data
+            .ok_or_else(|| AppError::ExternalApiError("七云登录响应数据为空".to_string()))?;
 
         self.admin_id = data["id"].as_i64();
         self.username = data["name"].as_str().map(|s| s.to_string());
@@ -117,7 +114,11 @@ impl SevenCloudAPI {
         Ok(())
     }
 
-    pub async fn get_orders(&self, start_date: &str, end_date: &str) -> AppResult<Vec<OrderRecord>> {
+    pub async fn get_orders(
+        &self,
+        start_date: &str,
+        end_date: &str,
+    ) -> AppResult<Vec<OrderRecord>> {
         self.ensure_logged_in()?;
 
         let url = format!("{}/ORDER-SERVER/tOrder/pageOrder", self.config.base_url);
@@ -144,7 +145,8 @@ impl SevenCloudAPI {
             params.insert("ifForeign", "".to_string());
             params.insert("chartType", "day".to_string());
 
-            let response = self.client
+            let response = self
+                .client
                 .get(&url)
                 .query(&params)
                 .header("Authorization", self.token.as_ref().unwrap())
@@ -154,14 +156,15 @@ impl SevenCloudAPI {
             let result: ApiResponse<OrdersData> = response.json().await?;
 
             if !result.success {
-                return Err(AppError::ExternalApiError(
-                    format!("获取订单失败: {}", result.message)
-                ));
+                return Err(AppError::ExternalApiError(format!(
+                    "获取订单失败: {}",
+                    result.message
+                )));
             }
 
-            let page_data = result.data.ok_or_else(|| {
-                AppError::ExternalApiError("订单数据为空".to_string())
-            })?;
+            let page_data = result
+                .data
+                .ok_or_else(|| AppError::ExternalApiError("订单数据为空".to_string()))?;
 
             all_orders.extend(page_data.records);
 
@@ -190,10 +193,12 @@ impl SevenCloudAPI {
             });
 
             if let Some(is_use) = is_use {
-                data["isUse"] = serde_json::Value::String(if is_use { "1" } else { "0" }.to_string());
+                data["isUse"] =
+                    serde_json::Value::String(if is_use { "1" } else { "0" }.to_string());
             }
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&url)
                 .json(&data)
                 .header("Authorization", self.token.as_ref().unwrap())
@@ -203,14 +208,15 @@ impl SevenCloudAPI {
             let result: ApiResponse<CouponsData> = response.json().await?;
 
             if !result.success {
-                return Err(AppError::ExternalApiError(
-                    format!("获取优惠码失败: {}", result.message)
-                ));
+                return Err(AppError::ExternalApiError(format!(
+                    "获取优惠码失败: {}",
+                    result.message
+                )));
             }
 
-            let page_data = result.data.ok_or_else(|| {
-                AppError::ExternalApiError("优惠码数据为空".to_string())
-            })?;
+            let page_data = result
+                .data
+                .ok_or_else(|| AppError::ExternalApiError("优惠码数据为空".to_string()))?;
 
             all_coupons.extend(page_data.records);
 
@@ -241,7 +247,9 @@ impl SevenCloudAPI {
         }
 
         if expire_months == 0 || expire_months > 3 {
-            return Err(AppError::ValidationError("有效期必须在1-3个月之间".to_string()));
+            return Err(AppError::ValidationError(
+                "有效期必须在1-3个月之间".to_string(),
+            ));
         }
 
         let url = format!("{}/SZWL-SERVER/tPromoCode/add", self.config.base_url);
@@ -256,7 +264,8 @@ impl SevenCloudAPI {
         params.insert("frpCode", "WEIXIN_NATIVE".to_string());
         params.insert("adminId", self.admin_id.unwrap().to_string());
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .query(&params)
             .header("Authorization", self.token.as_ref().unwrap())
@@ -266,12 +275,18 @@ impl SevenCloudAPI {
         let result: ApiResponse<String> = response.json().await?;
 
         if !result.success {
-            return Err(AppError::ExternalApiError(
-                format!("生成优惠码失败: {}", result.message)
-            ));
+            return Err(AppError::ExternalApiError(format!(
+                "生成优惠码失败: {}",
+                result.message
+            )));
         }
 
-        log::info!("成功生成优惠码: {}, 金额: {}, 有效期: {}个月", code, discount, expire_months);
+        log::info!(
+            "成功生成优惠码: {}, 金额: {}, 有效期: {}个月",
+            code,
+            discount,
+            expire_months
+        );
 
         Ok(true)
     }

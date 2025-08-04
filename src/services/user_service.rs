@@ -1,6 +1,6 @@
-use sqlx::SqlitePool;
-use crate::models::*;
 use crate::error::{AppError, AppResult};
+use crate::models::*;
+use sqlx::SqlitePool;
 
 #[derive(Clone)]
 pub struct UserService {
@@ -12,7 +12,10 @@ impl UserService {
         Self { pool }
     }
 
-    pub async fn get_user_profile(&self, user_id: i64) -> AppResult<(UserResponse, UserStatistics)> {
+    pub async fn get_user_profile(
+        &self,
+        user_id: i64,
+    ) -> AppResult<(UserResponse, UserStatistics)> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -49,17 +52,25 @@ impl UserService {
         Ok((user_response, statistics))
     }
 
-    pub async fn update_user_profile(&self, user_id: i64, request: UpdateUserRequest) -> AppResult<UserResponse> {
+    pub async fn update_user_profile(
+        &self,
+        user_id: i64,
+        request: UpdateUserRequest,
+    ) -> AppResult<UserResponse> {
         // 验证输入
         if let Some(username) = &request.username {
             if username.len() < 2 || username.len() > 20 {
-                return Err(AppError::ValidationError("用户名长度必须在2-20字符之间".to_string()));
+                return Err(AppError::ValidationError(
+                    "用户名长度必须在2-20字符之间".to_string(),
+                ));
             }
         }
 
         let birthday = if let Some(birthday_str) = &request.birthday {
-            Some(chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
-                .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?)
+            Some(
+                chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
+                    .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?,
+            )
         } else {
             None
         };
@@ -113,7 +124,11 @@ impl UserService {
         Ok(user_response)
     }
 
-    pub async fn get_user_referrals(&self, user_id: i64, params: &PaginationParams) -> AppResult<PaginatedResponse<UserResponse>> {
+    pub async fn get_user_referrals(
+        &self,
+        user_id: i64,
+        params: &PaginationParams,
+    ) -> AppResult<PaginatedResponse<UserResponse>> {
         let offset = params.get_offset() as i64;
         let limit = params.get_limit() as i64;
 
@@ -149,7 +164,12 @@ impl UserService {
 
         let items: Vec<UserResponse> = referrals.into_iter().map(UserResponse::from).collect();
 
-        Ok(PaginatedResponse::new(items, params.page.unwrap_or(1), params.page_size.unwrap_or(20), total))
+        Ok(PaginatedResponse::new(
+            items,
+            params.page.unwrap_or(1),
+            params.page_size.unwrap_or(20),
+            total,
+        ))
     }
 
     async fn get_user_statistics(&self, user_id: i64) -> AppResult<UserStatistics> {

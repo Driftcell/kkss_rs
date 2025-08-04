@@ -1,11 +1,11 @@
-use chrono::{Duration, Utc, DateTime};
+use crate::error::{AppError, AppResult};
+use crate::external::*;
+use crate::models::*;
+use crate::utils::*;
+use chrono::{DateTime, Duration, Utc};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::models::*;
-use crate::utils::*;
-use crate::external::*;
-use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct AuthService {
@@ -49,7 +49,7 @@ impl AuthService {
                 let last_sent = DateTime::<Utc>::from_naive_utc_and_offset(created_at, Utc);
                 if now.signed_duration_since(last_sent) < Duration::seconds(60) {
                     return Err(AppError::ValidationError(
-                        "验证码发送过于频繁，请60秒后再试".to_string()
+                        "验证码发送过于频繁，请60秒后再试".to_string(),
                     ));
                 }
             }
@@ -60,7 +60,9 @@ impl AuthService {
         let expires_at = Utc::now() + Duration::minutes(5);
 
         // 发送短信
-        self.twilio_service.send_verification_code(phone, &code).await?;
+        self.twilio_service
+            .send_verification_code(phone, &code)
+            .await?;
 
         // 存储验证码到数据库
         sqlx::query!(
@@ -81,15 +83,13 @@ impl AuthService {
         validate_password(&request.password)?;
 
         // 验证验证码
-        self.verify_code(&request.phone, &request.verification_code).await?;
+        self.verify_code(&request.phone, &request.verification_code)
+            .await?;
 
         // 检查手机号是否已注册
-        let existing_user = sqlx::query!(
-            "SELECT id FROM users WHERE phone = ?",
-            request.phone
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = ?", request.phone)
+            .fetch_optional(&self.pool)
+            .await?;
 
         if existing_user.is_some() {
             return Err(AppError::ValidationError("手机号已注册".to_string()));
@@ -99,8 +99,20 @@ impl AuthService {
         let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
             .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?;
 
-        // 生成唯一会员号
-        let member_code = generate_unique_member_code(&self.pool).await?;
+        // 从手机号生成会员号（去掉+1前缀的十位数字）
+        let member_code = extract_member_code_from_phone(&request.phone)?;
+
+        // 检查会员号是否已存在（防止重复注册）
+        let existing_member =
+            sqlx::query!("SELECT id FROM users WHERE member_code = ?", member_code)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        if existing_member.is_some() {
+            return Err(AppError::ValidationError(
+                "该手机号对应的会员号已存在".to_string(),
+            ));
+        }
 
         // 密码哈希
         let password_hash = hash_password(&request.password)?;
@@ -152,16 +164,21 @@ impl AuthService {
         if let Some(referrer_user_id) = referrer_id {
             // 有推荐人的情况：给推荐人和新用户都发放推荐优惠码
             // 给推荐人发放推荐奖励优惠码（$1.0）
-            self.create_referral_discount_code(referrer_user_id, 50).await?; // 50美分
-            
+            self.create_referral_discount_code(referrer_user_id, 50)
+                .await?; // 50美分
+
             // 给新用户发放推荐优惠码（$0.5）
             self.create_referral_discount_code(user_id, 50).await?; // 50美分
         }
         // 如果没有推荐人，则不发放任何优惠码
 
         // 生成JWT令牌
-        let access_token = self.jwt_service.generate_access_token(user_id, &member_code)?;
-        let refresh_token = self.jwt_service.generate_refresh_token(user_id, &member_code)?;
+        let access_token = self
+            .jwt_service
+            .generate_access_token(user_id, &member_code)?;
+        let refresh_token = self
+            .jwt_service
+            .generate_refresh_token(user_id, &member_code)?;
 
         // 获取完整用户信息
         let user = self.get_user_by_id(user_id).await?;
@@ -196,9 +213,7 @@ impl AuthService {
         .fetch_optional(&self.pool)
         .await?;
 
-        let user = user.ok_or_else(|| {
-            AppError::AuthError("用户不存在或密码错误".to_string())
-        })?;
+        let user = user.ok_or_else(|| AppError::AuthError("用户不存在或密码错误".to_string()))?;
 
         // 验证密码
         let is_valid = verify_password(&request.password, &user.password_hash)?;
@@ -207,8 +222,12 @@ impl AuthService {
         }
 
         // 生成JWT令牌
-        let access_token = self.jwt_service.generate_access_token(user.id, &user.member_code)?;
-        let refresh_token = self.jwt_service.generate_refresh_token(user.id, &user.member_code)?;
+        let access_token = self
+            .jwt_service
+            .generate_access_token(user.id, &user.member_code)?;
+        let refresh_token = self
+            .jwt_service
+            .generate_refresh_token(user.id, &user.member_code)?;
 
         let user_response = UserResponse::from(user);
 
@@ -223,14 +242,18 @@ impl AuthService {
     pub async fn refresh_token(&self, refresh_token: &str) -> AppResult<AuthResponse> {
         // 验证刷新令牌
         let claims = self.jwt_service.verify_refresh_token(refresh_token)?;
-        let user_id: i64 = claims.sub.parse()
+        let user_id: i64 = claims
+            .sub
+            .parse()
             .map_err(|_| AppError::AuthError("无效的令牌".to_string()))?;
 
         // 获取用户信息
         let user = self.get_user_by_id(user_id).await?;
 
         // 生成新的访问令牌
-        let access_token = self.jwt_service.generate_access_token(user.id, &user.member_code)?;
+        let access_token = self
+            .jwt_service
+            .generate_access_token(user.id, &user.member_code)?;
 
         let user_response = UserResponse::from(user);
 
@@ -250,19 +273,20 @@ impl AuthService {
         )
         .fetch_optional(&self.pool)
         .await?;
-        
+
         if let Some(stored_code) = verification_code {
             let now = Utc::now();
-            let expires_at = DateTime::<Utc>::from_naive_utc_and_offset(stored_code.expires_at, Utc);
-            
+            let expires_at =
+                DateTime::<Utc>::from_naive_utc_and_offset(stored_code.expires_at, Utc);
+
             if now > expires_at {
                 return Err(AppError::ValidationError("验证码已过期".to_string()));
             }
-            
+
             if stored_code.code != code {
                 return Err(AppError::ValidationError("验证码错误".to_string()));
             }
-            
+
             // 验证成功后删除已使用的验证码
             sqlx::query!(
                 "DELETE FROM verification_codes WHERE phone = ? AND code = ?",
@@ -271,10 +295,12 @@ impl AuthService {
             )
             .execute(&self.pool)
             .await?;
-            
+
             Ok(())
         } else {
-            Err(AppError::ValidationError("验证码不存在或已过期".to_string()))
+            Err(AppError::ValidationError(
+                "验证码不存在或已过期".to_string(),
+            ))
         }
     }
 
@@ -301,18 +327,19 @@ impl AuthService {
     async fn create_referral_discount_code(&self, _user_id: i64, amount: i64) -> AppResult<()> {
         // 生成6位数字优惠码
         let code = generate_six_digit_code();
-        
+
         // 将美分转换为美元
         let discount_dollars = amount as f64 / 100.0;
-        
+
         // 使用SevenCloud API生成优惠码
         let mut api = self.sevencloud_api.lock().await;
-        
+
         // 先尝试登录
         api.login().await?;
-        
+
         // 生成优惠码，有效期3个月
-        api.generate_discount_code(&code, discount_dollars, 3).await?;
+        api.generate_discount_code(&code, discount_dollars, 3)
+            .await?;
 
         Ok(())
     }
@@ -320,12 +347,9 @@ impl AuthService {
     // 清理过期的验证码
     pub async fn cleanup_expired_verification_codes(&self) -> AppResult<()> {
         let now = Utc::now();
-        sqlx::query!(
-            "DELETE FROM verification_codes WHERE expires_at < ?",
-            now
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query!("DELETE FROM verification_codes WHERE expires_at < ?", now)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
@@ -334,7 +358,7 @@ impl AuthService {
 mod tests {
     use super::*;
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_verification_code_structure() {
         // 测试验证码数据结构是否正确
         assert!(true, "Verification code has been moved to database storage");
@@ -345,7 +369,7 @@ mod tests {
         // 测试VerificationCode模型创建
         use crate::models::VerificationCode;
         use chrono::Utc;
-        
+
         let now = Utc::now();
         let verification_code = VerificationCode {
             id: 1,
@@ -354,7 +378,7 @@ mod tests {
             created_at: now,
             expires_at: now + Duration::minutes(5),
         };
-        
+
         assert_eq!(verification_code.phone, "+1234567890");
         assert_eq!(verification_code.code, "123456");
     }
