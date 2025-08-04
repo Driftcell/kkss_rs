@@ -119,7 +119,7 @@ impl AuthService {
         };
 
         // 生成推荐码
-        let referral_code = generate_referral_code();
+        let referral_code = generate_unique_referral_code(&self.pool).await?;
 
         // 插入用户
         let member_type_str = member_type.to_string();

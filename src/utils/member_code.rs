@@ -24,25 +24,70 @@ pub async fn generate_unique_member_code(pool: &SqlitePool) -> AppResult<String>
     }
 }
 
-/// 生成推荐码
-pub fn generate_referral_code() -> String {
-    use rand::distributions::Alphanumeric;
+/// 生成唯一的六位数字推荐码
+pub async fn generate_unique_referral_code(pool: &SqlitePool) -> AppResult<String> {
+    let mut rng = rand::thread_rng();
     
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect()
+    loop {
+        // 生成100000到999999之间的六位数字
+        let referral_code = rng.gen_range(100000_u32..=999999_u32).to_string();
+        
+        // 检查是否已存在
+        let exists = sqlx::query!(
+            "SELECT COUNT(*) as count FROM users WHERE referral_code = ?",
+            referral_code
+        )
+        .fetch_one(pool)
+        .await?;
+        
+        if exists.count == 0 {
+            return Ok(referral_code);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlx::SqlitePool;
 
-    #[test]
-    fn test_generate_referral_code() {
-        let code = generate_referral_code();
-        assert_eq!(code.len(), 32);
-        assert!(code.chars().all(|c| c.is_alphanumeric()));
+    #[tokio::test]
+    async fn test_generate_unique_referral_code() {
+        // 使用内存数据库进行测试
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        
+        // 创建测试用户表
+        sqlx::query!(
+            r#"
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                referral_code TEXT UNIQUE
+            )
+            "#
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let code = generate_unique_referral_code(&pool).await.unwrap();
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+        
+        // 确保代码在有效范围内
+        let code_num: u32 = code.parse().unwrap();
+        assert!(code_num >= 100000 && code_num <= 999999);
+        
+        // 插入一个推荐码到数据库
+        sqlx::query!(
+            "INSERT INTO users (referral_code) VALUES (?)",
+            code
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        
+        // 生成另一个推荐码，应该与第一个不同
+        let code2 = generate_unique_referral_code(&pool).await.unwrap();
+        assert_ne!(code, code2);
     }
 }

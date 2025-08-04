@@ -6,4 +6,4 @@ pub mod member_code;
 pub use jwt::*;
 pub use phone::*;
 pub use password::*;
-pub use member_code::*;
+pub use member_code::{generate_unique_member_code, generate_unique_referral_code};
