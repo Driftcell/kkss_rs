@@ -3,6 +3,7 @@ pub mod order;
 pub mod discount_code;
 pub mod recharge_record;
 pub mod sweet_cash_transaction;
+pub mod verification_code;
 pub mod pagination;
 pub mod common;
 
@@ -11,5 +12,6 @@ pub use order::*;
 pub use discount_code::*;
 pub use recharge_record::*;
 pub use sweet_cash_transaction::*;
+pub use verification_code::*;
 pub use pagination::*;
 pub use common::*;
