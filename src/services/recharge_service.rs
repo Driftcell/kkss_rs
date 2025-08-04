@@ -28,7 +28,12 @@ impl RechargeService {
 
         // 创建Stripe支付意图
         let payment_intent = self.stripe_service
-            .create_payment_intent(request.amount, user_id)
+            .create_payment_intent(
+                request.amount, 
+                user_id, 
+                Some("usd".to_string()),  // 使用美元作为默认货币
+                Some(format!("用户{}充值${:.2}", user_id, request.amount as f64 / 100.0))
+            )
             .await?;
 
         // 保存充值记录
