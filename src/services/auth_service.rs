@@ -103,7 +103,7 @@ impl AuthService {
         // 处理推荐人
         let (referrer_id, member_type) = if let Some(referrer_code) = &request.referrer_code {
             let referrer = sqlx::query!(
-                "SELECT id FROM users WHERE member_code = ?",
+                "SELECT id as \"id!: i64\" FROM users WHERE member_code = ?",
                 referrer_code
             )
             .fetch_optional(&self.pool)
@@ -143,10 +143,16 @@ impl AuthService {
         .await?
         .last_insert_rowid();
 
-        // 为粉丝发放欢迎优惠码（$0.5）
-        if member_type == MemberType::Fan {
-            self.create_welcome_discount_code(user_id, 50).await?; // 50美分
+        // 根据是否有推荐人发放不同的优惠码
+        if let Some(referrer_user_id) = referrer_id {
+            // 有推荐人的情况：给推荐人和新用户都发放推荐优惠码
+            // 给推荐人发放推荐奖励优惠码（$1.0）
+            self.create_referral_discount_code(referrer_user_id, 50).await?; // 50美分
+            
+            // 给新用户发放推荐优惠码（$0.5）
+            self.create_referral_discount_code(user_id, 50).await?; // 50美分
         }
+        // 如果没有推荐人，则不发放任何优惠码
 
         // 生成JWT令牌
         let access_token = self.jwt_service.generate_access_token(user_id, &member_code)?;
@@ -292,6 +298,29 @@ impl AuthService {
         let expires_at = Utc::now() + Duration::days(365); // 1年有效期
 
         let code_type_str = CodeType::Welcome.to_string();
+        sqlx::query!(
+            r#"
+            INSERT INTO discount_codes (
+                user_id, code, discount_amount, code_type, expires_at
+            ) VALUES (?, ?, ?, ?, ?)
+            "#,
+            user_id,
+            code,
+            amount,
+            code_type_str,
+            expires_at
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn create_referral_discount_code(&self, user_id: i64, amount: i64) -> AppResult<()> {
+        let code = generate_verification_code(); // 重用验证码生成函数
+        let expires_at = Utc::now() + Duration::days(365); // 1年有效期
+
+        let code_type_str = CodeType::Referral.to_string();
         sqlx::query!(
             r#"
             INSERT INTO discount_codes (
