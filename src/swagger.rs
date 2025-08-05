@@ -91,7 +91,7 @@ impl Modify for SecurityAddon {
         description = "KKSS Backend REST API documentation",
         contact(
             name = "API Support",
-            email = "support@kkss.com"
+            email = "driftcell@icloud.com"
         )
     ),
     servers(
