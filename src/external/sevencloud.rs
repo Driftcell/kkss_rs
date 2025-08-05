@@ -109,7 +109,7 @@ impl SevenCloudAPI {
         self.username = data["name"].as_str().map(|s| s.to_string());
         self.token = data["currentToken"].as_str().map(|s| s.to_string());
 
-        log::info!("Sevencloud API login successful, admin_id: {:?}", self.admin_id);
+        log::info!("Sevencloud API login successful, admin_id: {:?}", self.admin_id.unwrap());
 
         Ok(())
     }
