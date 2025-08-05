@@ -22,12 +22,12 @@ pub async fn sync_orders(
     let start_date = query
         .get("start_date")
         .and_then(|v| v.as_str())
-        .unwrap_or("2024-01-01 00:00:00");
+        .unwrap_or("2025-01-01 00:00:00");
 
     let end_date = query
         .get("end_date")
         .and_then(|v| v.as_str())
-        .unwrap_or("2024-12-31 23:59:59");
+        .unwrap_or("2025-12-31 23:59:59");
 
     match sync_service.sync_orders(start_date, end_date).await {
         Ok(count) => Ok(HttpResponse::Ok().json(json!({
@@ -35,7 +35,7 @@ pub async fn sync_orders(
             "data": {
                 "processed_count": count
             },
-            "message": "订单同步完成"
+            "message": "Sync completed successfully"
         }))),
         Err(e) => Ok(e.error_response()),
     }
@@ -57,7 +57,7 @@ pub async fn sync_discount_codes(sync_service: web::Data<SyncService>) -> Result
             "data": {
                 "processed_count": count
             },
-            "message": "优惠码同步完成"
+            "message": "Sync completed successfully"
         }))),
         Err(e) => Ok(e.error_response()),
     }

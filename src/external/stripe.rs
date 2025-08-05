@@ -111,7 +111,7 @@ impl StripeService {
         // 验证最小金额 (50美分 = $0.50)
         if amount < 50 {
             return Err(AppError::ValidationError(
-                "充值金额不能少于 $0.50".to_string(),
+                "Minimum amount is $0.50".to_string(),
             ));
         }
 
@@ -132,7 +132,7 @@ impl StripeService {
         } else {
             params.push((
                 "description",
-                format!("充值 ${:.2} 到账户", amount as f64 / 100.0),
+                format!("Recharge ${:.2} to account", amount as f64 / 100.0),
             ));
         }
 
@@ -151,9 +151,9 @@ impl StripeService {
             let error_text = response
                 .text()
                 .await
-                .unwrap_or_else(|_| "未知错误".to_string());
+                .unwrap_or_else(|_| "Unknown error".to_string());
             Err(AppError::ExternalApiError(format!(
-                "创建支付意图失败: {}",
+                "Failed to create payment intent: {}",
                 error_text
             )))
         }
@@ -191,9 +191,9 @@ impl StripeService {
             let error_text = response
                 .text()
                 .await
-                .unwrap_or_else(|_| "未知错误".to_string());
+                .unwrap_or_else(|_| "Unknown error".to_string());
             Err(AppError::ExternalApiError(format!(
-                "获取支付意图失败: {}",
+                "Failed to retrieve payment intent: {}",
                 error_text
             )))
         }
@@ -207,7 +207,7 @@ impl StripeService {
     ) -> AppResult<()> {
         // 验证webhook签名头是否存在
         if signature.is_empty() {
-            return Err(AppError::AuthError("无效的webhook签名".to_string()));
+            return Err(AppError::AuthError("Invalid webhook signature".to_string()));
         }
 
         // 解析签名头格式: t=timestamp,v1=signature
@@ -225,7 +225,7 @@ impl StripeService {
         }
 
         if timestamp.is_none() || v1_signature.is_none() {
-            return Err(AppError::AuthError("无效的webhook签名格式".to_string()));
+            return Err(AppError::AuthError("Invalid webhook signature format".to_string()));
         }
 
         // 在生产环境中，这里应该使用HMAC-SHA256验证签名
@@ -298,7 +298,7 @@ impl StripeService {
 
         if amount < min_amount {
             return Err(AppError::ValidationError(format!(
-                "充值金额不能少于 {} {}",
+                "Minimum recharge amount is {} {}",
                 if currency == "jpy" {
                     format!("{}", min_amount)
                 } else {
@@ -311,7 +311,7 @@ impl StripeService {
         // Stripe支持的最大金额是99999999 (约$999,999.99)
         if amount > 99999999 {
             return Err(AppError::ValidationError(
-                "充值金额超过最大限制".to_string(),
+                "Maximum recharge amount is $999,999.99".to_string(),
             ));
         }
 

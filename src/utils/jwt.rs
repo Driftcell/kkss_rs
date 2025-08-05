@@ -71,7 +71,7 @@ impl JwtService {
         let claims = self.verify_token(token)?;
 
         if claims.token_type != "access" {
-            return Err(AppError::AuthError("无效的访问令牌类型".to_string()));
+            return Err(AppError::AuthError("Invalid access token type".to_string()));
         }
 
         Ok(claims)
@@ -81,7 +81,7 @@ impl JwtService {
         let claims = self.verify_token(token)?;
 
         if claims.token_type != "refresh" {
-            return Err(AppError::AuthError("无效的刷新令牌类型".to_string()));
+            return Err(AppError::AuthError("Invalid refresh token type".to_string()));
         }
 
         Ok(claims)

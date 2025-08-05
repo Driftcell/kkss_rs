@@ -96,20 +96,20 @@ impl SevenCloudAPI {
 
         if !result.success {
             return Err(AppError::ExternalApiError(format!(
-                "七云登录失败: {}",
+                "Can't login: {}",
                 result.message
             )));
         }
 
         let data = result
             .data
-            .ok_or_else(|| AppError::ExternalApiError("七云登录响应数据为空".to_string()))?;
+            .ok_or_else(|| AppError::ExternalApiError("Sevencloud response is empty".to_string()))?;
 
         self.admin_id = data["id"].as_i64();
         self.username = data["name"].as_str().map(|s| s.to_string());
         self.token = data["currentToken"].as_str().map(|s| s.to_string());
 
-        log::info!("七云API登录成功, admin_id: {:?}", self.admin_id);
+        log::info!("Sevencloud API login successful, admin_id: {:?}", self.admin_id);
 
         Ok(())
     }
@@ -157,14 +157,14 @@ impl SevenCloudAPI {
 
             if !result.success {
                 return Err(AppError::ExternalApiError(format!(
-                    "获取订单失败: {}",
+                    "Failed to retrieve orders: {}",
                     result.message
                 )));
             }
 
             let page_data = result
                 .data
-                .ok_or_else(|| AppError::ExternalApiError("订单数据为空".to_string()))?;
+                .ok_or_else(|| AppError::ExternalApiError("Orders data is empty".to_string()))?;
 
             all_orders.extend(page_data.records);
 
@@ -209,14 +209,14 @@ impl SevenCloudAPI {
 
             if !result.success {
                 return Err(AppError::ExternalApiError(format!(
-                    "获取优惠码失败: {}",
+                    "Failed to retrieve discount codes: {}",
                     result.message
                 )));
             }
 
             let page_data = result
                 .data
-                .ok_or_else(|| AppError::ExternalApiError("优惠码数据为空".to_string()))?;
+                .ok_or_else(|| AppError::ExternalApiError("Discount codes data is empty".to_string()))?;
 
             all_coupons.extend(page_data.records);
 
@@ -239,16 +239,16 @@ impl SevenCloudAPI {
         self.ensure_logged_in()?;
 
         if code.len() != 6 || !code.chars().all(|c| c.is_digit(10)) {
-            return Err(AppError::ValidationError("优惠码必须是6位数字".to_string()));
+            return Err(AppError::ValidationError("Invalid discount code format".to_string()));
         }
 
         if discount <= 0.0 {
-            return Err(AppError::ValidationError("折扣金额必须大于0".to_string()));
+            return Err(AppError::ValidationError("Discount amount must be greater than 0".to_string()));
         }
 
         if expire_months == 0 || expire_months > 3 {
             return Err(AppError::ValidationError(
-                "有效期必须在1-3个月之间".to_string(),
+                "Expiration period must be between 1-3 months".to_string(),
             ));
         }
 
@@ -276,13 +276,13 @@ impl SevenCloudAPI {
 
         if !result.success {
             return Err(AppError::ExternalApiError(format!(
-                "生成优惠码失败: {}",
+                "Failed to generate discount code: {}",
                 result.message
             )));
         }
 
         log::info!(
-            "成功生成优惠码: {}, 金额: {}, 有效期: {}个月",
+            "Successfully generated discount code: {}, Amount: {}, Expiration: {} months",
             code,
             discount,
             expire_months
@@ -293,7 +293,7 @@ impl SevenCloudAPI {
 
     fn ensure_logged_in(&self) -> AppResult<()> {
         if self.token.is_none() || self.admin_id.is_none() {
-            return Err(AppError::ExternalApiError("未登录七云API".to_string()));
+            return Err(AppError::ExternalApiError("Not logged in to Sevencloud API".to_string()));
         }
         Ok(())
     }

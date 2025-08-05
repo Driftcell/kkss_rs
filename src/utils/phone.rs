@@ -7,7 +7,7 @@ pub fn validate_us_phone(phone: &str) -> AppResult<()> {
 
     if !phone_regex.is_match(phone) {
         return Err(AppError::ValidationError(
-            "手机号格式无效，必须是美国手机号格式 (+1xxxxxxxxxx)".to_string(),
+            "Invalid US phone number format, must be (+1xxxxxxxxxx)".to_string(),
         ));
     }
 
@@ -39,7 +39,7 @@ pub fn extract_member_code_from_phone(phone: &str) -> AppResult<String> {
         Ok(digits)
     } else {
         Err(AppError::ValidationError(
-            "无法从手机号中提取member_code".to_string(),
+            "Failed to extract member code from phone number".to_string(),
         ))
     }
 }

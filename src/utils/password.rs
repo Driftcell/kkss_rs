@@ -15,7 +15,7 @@ pub fn validate_password(password: &str) -> AppResult<()> {
 
     if !has_lowercase || !has_uppercase || !has_digit {
         return Err(AppError::ValidationError(
-            "密码必须包含大小写字母和数字".to_string(),
+            "Password must contain uppercase, lowercase letters, and numbers".to_string(),
         ));
     }
 
@@ -25,12 +25,12 @@ pub fn validate_password(password: &str) -> AppResult<()> {
 /// 对密码进行哈希
 pub fn hash_password(password: &str) -> AppResult<String> {
     hash(password, DEFAULT_COST)
-        .map_err(|e| AppError::InternalError(format!("密码哈希失败: {}", e)))
+        .map_err(|e| AppError::InternalError(format!("Failed to hash password: {}", e)))
 }
 
 /// 验证密码
 pub fn verify_password(password: &str, hash: &str) -> AppResult<bool> {
-    verify(password, hash).map_err(|e| AppError::InternalError(format!("密码验证失败: {}", e)))
+    verify(password, hash).map_err(|e| AppError::InternalError(format!("Failed to verify password: {}", e)))
 }
 
 #[cfg(test)]

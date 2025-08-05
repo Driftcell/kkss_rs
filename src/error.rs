@@ -6,43 +6,43 @@ pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("数据库错误: {0}")]
+    #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
 
-    #[error("验证错误: {0}")]
+    #[error("Validation error: {0}")]
     ValidationError(String),
 
-    #[error("认证错误: {0}")]
+    #[error("Auth error: {0}")]
     AuthError(String),
 
-    #[error("未找到资源: {0}")]
+    #[error("Not found: {0}")]
     NotFound(String),
 
-    #[error("权限不足")]
+    #[error("Forbidden")]
     Forbidden,
 
-    #[error("权限被拒绝")]
+    #[error("Permission denied")]
     PermissionDenied,
 
-    #[error("外部API错误: {0}")]
+    #[error("External API error: {0}")]
     ExternalApiError(String),
 
-    #[error("配置错误: {0}")]
+    #[error("Config error: {0}")]
     ConfigError(String),
 
-    #[error("内部服务器错误: {0}")]
+    #[error("Internal server error: {0}")]
     InternalError(String),
 
-    #[error("JWT错误: {0}")]
+    #[error("JWT error: {0}")]
     JwtError(#[from] jsonwebtoken::errors::Error),
 
-    #[error("HTTP请求错误: {0}")]
+    #[error("HTTP request error: {0}")]
     ReqwestError(#[from] reqwest::Error),
 
-    #[error("JSON序列化/反序列化错误: {0}")]
+    #[error("JSON serialization/deserialization error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
 
-    #[error("迁移错误: {0}")]
+    #[error("Migration error: {0}")]
     MigrateError(#[from] sqlx::migrate::MigrateError),
 }
 
@@ -61,12 +61,12 @@ impl ResponseError for AppError {
             AppError::Forbidden => (
                 actix_web::http::StatusCode::FORBIDDEN,
                 "FORBIDDEN",
-                &"权限不足".to_string(),
+                &"Forbidden".to_string(),
             ),
             AppError::PermissionDenied => (
                 actix_web::http::StatusCode::FORBIDDEN,
                 "FORBIDDEN",
-                &"权限不足".to_string(),
+                &"Permission denied".to_string(),
             ),
             AppError::ExternalApiError(msg) => (
                 actix_web::http::StatusCode::BAD_GATEWAY,
@@ -78,7 +78,7 @@ impl ResponseError for AppError {
                 (
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "DATABASE_ERROR",
-                    &"数据库错误".to_string(),
+                    &"Database error".to_string(),
                 )
             }
             AppError::MigrateError(err) => {
@@ -86,7 +86,7 @@ impl ResponseError for AppError {
                 (
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "MIGRATION_ERROR",
-                    &"数据库迁移错误".to_string(),
+                    &"Migration error".to_string(),
                 )
             }
             _ => {
@@ -94,7 +94,7 @@ impl ResponseError for AppError {
                 (
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "INTERNAL_ERROR",
-                    &"内部服务器错误".to_string(),
+                    &"Internal server error".to_string(),
                 )
             }
         };

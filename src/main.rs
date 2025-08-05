@@ -42,7 +42,7 @@ async fn main() -> std::io::Result<()> {
 
     let mut sevencloud_api = SevenCloudAPI::new(config.sevencloud.clone());
     if let Err(e) = sevencloud_api.login().await {
-        log::error!("七云API登录失败: {:?}", e);
+        log::error!("SevenCloud API login failed: {:?}", e);
     }
     let sevencloud_api = Arc::new(Mutex::new(sevencloud_api));
 
@@ -61,7 +61,7 @@ async fn main() -> std::io::Result<()> {
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
 
     // 启动HTTP服务器
-    log::info!("服务器启动在 {}:{}", config.server.host, config.server.port);
+    log::info!("Starting HTTP server at {}:{}", config.server.host, config.server.port);
 
     HttpServer::new(move || {
         App::new()

@@ -103,7 +103,7 @@ pub async fn refresh(
                     "success": false,
                     "error": {
                         "code": "INVALID_TOKEN_FORMAT",
-                        "message": "无效的令牌格式"
+                        "message": "Invalid token format"
                     }
                 })));
             }
@@ -112,7 +112,7 @@ pub async fn refresh(
                 "success": false,
                 "error": {
                     "code": "INVALID_TOKEN_FORMAT",
-                    "message": "无效的令牌格式"
+                    "message": "Invalid token format"
                 }
             })));
         }
@@ -121,7 +121,7 @@ pub async fn refresh(
             "success": false,
             "error": {
                 "code": "MISSING_TOKEN",
-                "message": "缺少刷新令牌"
+                "message": "Missing authorization token"
             }
         })));
     };

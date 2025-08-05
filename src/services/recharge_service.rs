@@ -29,7 +29,7 @@ impl RechargeService {
         // 验证充值金额
         if ![10000, 20000, 30000, 50000].contains(&request.amount) {
             return Err(AppError::ValidationError(
-                "充值金额只能是 $100, $200, $300, $500".to_string(),
+                "The recharge amount must be $100, $200, $300, or $500".to_string(),
             ));
         }
 
@@ -45,7 +45,7 @@ impl RechargeService {
                 user_id,
                 Some("usd".to_string()), // 使用美元作为默认货币
                 Some(format!(
-                    "用户{}充值${:.2}",
+                    "User {} recharges ${:.2}",
                     user_id,
                     request.amount as f64 / 100.0
                 )),
@@ -92,7 +92,7 @@ impl RechargeService {
             .await?;
 
         if payment_intent.status != "succeeded" {
-            return Err(AppError::ValidationError("支付未成功".to_string()));
+            return Err(AppError::ValidationError("Payment not successful".to_string()));
         }
 
         // 开始事务
@@ -116,7 +116,7 @@ impl RechargeService {
         .await?;
 
         let mut recharge_record =
-            recharge_record.ok_or_else(|| AppError::NotFound("充值记录不存在".to_string()))?;
+            recharge_record.ok_or_else(|| AppError::NotFound("Recharge record not found".to_string()))?;
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {

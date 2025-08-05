@@ -85,7 +85,7 @@ impl DiscountCodeService {
         // 验证有效期
         if request.expire_months < 1 || request.expire_months > 3 {
             return Err(AppError::ValidationError(
-                "有效期必须在1-3个月之间".to_string(),
+                "The expiration period must be between 1 and 3 months".to_string(),
             ));
         }
 
@@ -97,10 +97,10 @@ impl DiscountCodeService {
             .fetch_optional(&mut *tx)
             .await?;
 
-        let user = user.ok_or_else(|| AppError::NotFound("用户不存在".to_string()))?;
+        let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         if user.sweet_cash.unwrap_or(0) < sweet_cash_needed {
-            return Err(AppError::ValidationError("甜品现金余额不足".to_string()));
+            return Err(AppError::ValidationError("Insufficient sweet cash balance".to_string()));
         }
 
         // 扣除甜品现金
@@ -146,7 +146,7 @@ impl DiscountCodeService {
         let remaining_sweet_cash = user.sweet_cash.unwrap_or(0) - sweet_cash_needed;
         let transaction_type_str = TransactionType::Redeem.to_string();
         let negative_amount = -sweet_cash_needed;
-        let description = format!("兑换{}美分优惠码", request.discount_amount);
+        let description = format!("Redeemed {} cents discount code", request.discount_amount);
 
         sqlx::query!(
             r#"

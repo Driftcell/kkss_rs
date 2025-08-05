@@ -49,7 +49,7 @@ impl AuthService {
                 let last_sent = DateTime::<Utc>::from_naive_utc_and_offset(created_at, Utc);
                 if now.signed_duration_since(last_sent) < Duration::seconds(60) {
                     return Err(AppError::ValidationError(
-                        "验证码发送过于频繁，请60秒后再试".to_string(),
+                        "The verification code has been sent too frequently, please try again after 60 seconds.".to_string(),
                     ));
                 }
             }
@@ -92,12 +92,12 @@ impl AuthService {
             .await?;
 
         if existing_user.is_some() {
-            return Err(AppError::ValidationError("手机号已注册".to_string()));
+            return Err(AppError::ValidationError("The mobile phone number is registered".to_string()));
         }
 
         // 解析生日
         let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
-            .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?;
+            .map_err(|_| AppError::ValidationError("Invalid birthday format".to_string()))?;
 
         // 从手机号生成会员号（去掉+1前缀的十位数字）
         let member_code = extract_member_code_from_phone(&request.phone)?;
@@ -110,7 +110,7 @@ impl AuthService {
 
         if existing_member.is_some() {
             return Err(AppError::ValidationError(
-                "该手机号对应的会员号已存在".to_string(),
+                "The member code corresponding to this phone number already exists".to_string(),
             ));
         }
 
@@ -129,7 +129,7 @@ impl AuthService {
             if let Some(referrer) = referrer {
                 (Some(referrer.id), MemberType::Fan)
             } else {
-                return Err(AppError::ValidationError("推荐人不存在".to_string()));
+                return Err(AppError::ValidationError("The referrer does not exist".to_string()));
             }
         } else {
             (None, MemberType::Fan)
@@ -213,12 +213,12 @@ impl AuthService {
         .fetch_optional(&self.pool)
         .await?;
 
-        let user = user.ok_or_else(|| AppError::AuthError("用户不存在或密码错误".to_string()))?;
+        let user = user.ok_or_else(|| AppError::AuthError("User does not exist or password is incorrect".to_string()))?;
 
         // 验证密码
         let is_valid = verify_password(&request.password, &user.password_hash)?;
         if !is_valid {
-            return Err(AppError::AuthError("用户不存在或密码错误".to_string()));
+            return Err(AppError::AuthError("User does not exist or password is incorrect".to_string()));
         }
 
         // 生成JWT令牌
@@ -245,7 +245,7 @@ impl AuthService {
         let user_id: i64 = claims
             .sub
             .parse()
-            .map_err(|_| AppError::AuthError("无效的令牌".to_string()))?;
+            .map_err(|_| AppError::AuthError("Invalid token".to_string()))?;
 
         // 获取用户信息
         let user = self.get_user_by_id(user_id).await?;
@@ -280,11 +280,11 @@ impl AuthService {
                 DateTime::<Utc>::from_naive_utc_and_offset(stored_code.expires_at, Utc);
 
             if now > expires_at {
-                return Err(AppError::ValidationError("验证码已过期".to_string()));
+                return Err(AppError::ValidationError("The verification code has expired".to_string()));
             }
 
             if stored_code.code != code {
-                return Err(AppError::ValidationError("验证码错误".to_string()));
+                return Err(AppError::ValidationError("The verification code is incorrect".to_string()));
             }
 
             // 验证成功后删除已使用的验证码
@@ -299,7 +299,7 @@ impl AuthService {
             Ok(())
         } else {
             Err(AppError::ValidationError(
-                "验证码不存在或已过期".to_string(),
+                "The verification code does not exist or has expired".to_string(),
             ))
         }
     }
@@ -321,7 +321,7 @@ impl AuthService {
         .fetch_optional(&self.pool)
         .await?;
 
-        user.ok_or_else(|| AppError::NotFound("用户不存在".to_string()))
+        user.ok_or_else(|| AppError::NotFound("User not found".to_string()))
     }
 
     async fn create_referral_discount_code(&self, _user_id: i64, amount: i64) -> AppResult<()> {

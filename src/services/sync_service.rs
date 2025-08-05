@@ -28,13 +28,13 @@ impl SyncService {
 
         for order_record in orders {
             if let Err(e) = self.process_order(order_record).await {
-                log::error!("处理订单失败: {:?}", e);
+                log::error!("Failed to process order: {:?}", e);
                 continue;
             }
             processed_count += 1;
         }
 
-        log::info!("同步完成，处理订单数: {}", processed_count);
+        log::info!("Synchronization complete, processed orders: {}", processed_count);
         Ok(processed_count)
     }
 
@@ -45,7 +45,7 @@ impl SyncService {
             .await?;
 
         if existing.is_some() {
-            log::debug!("订单已存在，跳过: {}", order_record.id);
+            log::debug!("Order already exists, skipping: {}", order_record.id);
             return Ok(());
         }
 
@@ -106,7 +106,7 @@ impl SyncService {
                 .sweet_cash;
 
             let transaction_type_str = TransactionType::Earn.to_string();
-            let description = format!("订单 {} 奖励", order_record.id);
+            let description = format!("Order {} reward", order_record.id);
 
             sqlx::query!(
                 r#"
@@ -128,13 +128,13 @@ impl SyncService {
             tx.commit().await?;
 
             log::info!(
-                "处理订单成功: {}, 用户: {:?}, 甜品现金奖励: {}",
+                "Successfully processed order: {}, User: {:?}, Sweet cash reward: {}",
                 order_record.id,
                 user.id,
                 sweet_cash_earned
             );
         } else {
-            log::debug!("订单无关联用户，跳过: {}", order_record.id);
+            log::debug!("Order has no associated user, skipping: {}", order_record.id);
         }
 
         Ok(())
@@ -148,13 +148,13 @@ impl SyncService {
 
         for coupon_record in coupons {
             if let Err(e) = self.process_discount_code(coupon_record).await {
-                log::error!("处理优惠码失败: {:?}", e);
+                log::error!("Failed to process discount code: {:?}", e);
                 continue;
             }
             processed_count += 1;
         }
 
-        log::info!("同步优惠码完成，处理数量: {}", processed_count);
+        log::info!("Synchronization complete, processed discount codes: {}", processed_count);
         Ok(processed_count)
     }
 

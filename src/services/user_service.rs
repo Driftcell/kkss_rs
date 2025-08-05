@@ -32,7 +32,7 @@ impl UserService {
         .fetch_optional(&self.pool)
         .await?;
 
-        let user = user.ok_or_else(|| AppError::NotFound("用户不存在".to_string()))?;
+        let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         // 获取推荐人数
         let total_referrals = sqlx::query!(
@@ -61,7 +61,7 @@ impl UserService {
         if let Some(username) = &request.username {
             if username.len() < 2 || username.len() > 20 {
                 return Err(AppError::ValidationError(
-                    "用户名长度必须在2-20字符之间".to_string(),
+                    "Username length must be between 2 and 20 characters".to_string(),
                 ));
             }
         }
@@ -69,7 +69,7 @@ impl UserService {
         let birthday = if let Some(birthday_str) = &request.birthday {
             Some(
                 chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
-                    .map_err(|_| AppError::ValidationError("生日格式无效".to_string()))?,
+                    .map_err(|_| AppError::ValidationError("Invalid birthday format".to_string()))?,
             )
         } else {
             None
@@ -77,7 +77,7 @@ impl UserService {
 
         // 检查是否有需要更新的字段
         if request.username.is_none() && request.birthday.is_none() {
-            return Err(AppError::ValidationError("没有需要更新的字段".to_string()));
+            return Err(AppError::ValidationError("No fields to update".to_string()));
         }
 
         // 根据提供的字段执行相应的更新
@@ -115,7 +115,7 @@ impl UserService {
             }
             (None, None) => {
                 // 这种情况已经在上面检查过了，但为了完整性保留
-                return Err(AppError::ValidationError("没有需要更新的字段".to_string()));
+                return Err(AppError::ValidationError("No fields to update".to_string()));
             }
         }
 
