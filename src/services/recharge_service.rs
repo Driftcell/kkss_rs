@@ -6,6 +6,7 @@ use crate::models::{
     RechargeStatus, calculate_bonus_amount,
 };
 use sqlx::SqlitePool;
+use stripe::PaymentIntentStatus;
 
 #[derive(Clone)]
 pub struct RechargeService {
@@ -54,6 +55,7 @@ impl RechargeService {
 
         // 保存充值记录
         let status_str = RechargeStatus::Pending.to_string();
+        let payment_intent_id_str = payment_intent.id.to_string();
         sqlx::query!(
             r#"
             INSERT INTO recharge_records (
@@ -62,7 +64,7 @@ impl RechargeService {
             ) VALUES (?, ?, ?, ?, ?, ?)
             "#,
             user_id,
-            payment_intent.id,
+            payment_intent_id_str,
             request.amount,
             bonus_amount,
             total_amount,
@@ -72,8 +74,8 @@ impl RechargeService {
         .await?;
 
         Ok(CreatePaymentIntentResponse {
-            payment_intent_id: payment_intent.id,
-            client_secret: payment_intent.client_secret,
+            payment_intent_id: payment_intent_id_str,
+            client_secret: payment_intent.client_secret.unwrap_or_default(),
             amount: request.amount,
             bonus_amount,
             total_amount,
@@ -91,7 +93,7 @@ impl RechargeService {
             .retrieve_payment_intent(&request.payment_intent_id)
             .await?;
 
-        if payment_intent.status != "succeeded" {
+        if payment_intent.status != PaymentIntentStatus::Succeeded {
             return Err(AppError::ValidationError("Payment not successful".to_string()));
         }
 
@@ -132,10 +134,11 @@ impl RechargeService {
 
         // 更新充值记录状态
         let success_status = RechargeStatus::Succeeded.to_string();
+        let stripe_status_str = format!("{:?}", payment_intent.status);
         sqlx::query!(
             "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE id = ?",
             success_status,
-            payment_intent.status,
+            stripe_status_str,
             recharge_record.id
         )
         .execute(&mut *tx)
