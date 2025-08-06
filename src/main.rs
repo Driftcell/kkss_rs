@@ -75,6 +75,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(recharge_service.clone()))
             .app_data(web::Data::new(sync_service.clone()))
             .configure(swagger_config)
+            .configure(handlers::webhook_config)
             .service(
                 web::scope("/api/v1")
                     .configure(handlers::auth_config)

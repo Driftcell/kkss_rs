@@ -218,4 +218,148 @@ impl RechargeService {
             total,
         ))
     }
+
+    /// 处理Stripe webhook支付成功事件
+    ///
+    /// # 参数
+    ///
+    /// * `payment_intent_id` - Stripe支付意图ID
+    /// * `user_id` - 用户ID
+    ///
+    /// # 返回
+    ///
+    /// 成功时返回更新后的充值记录和新余额
+    pub async fn handle_payment_success_webhook(
+        &self,
+        payment_intent_id: &str,
+        user_id: i64,
+    ) -> AppResult<()> {
+        // 开始事务
+        let mut tx = self.pool.begin().await?;
+
+        // 获取充值记录
+        let recharge_record = sqlx::query_as!(
+            RechargeRecord,
+            r#"
+            SELECT
+                id, user_id, stripe_payment_intent_id, amount, bonus_amount,
+                total_amount, status as "status: RechargeStatus",
+                stripe_status, created_at, updated_at
+            FROM recharge_records
+            WHERE stripe_payment_intent_id = ? AND user_id = ?
+            "#,
+            payment_intent_id,
+            user_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let recharge_record = match recharge_record {
+            Some(record) => record,
+            None => {
+                log::warn!("Recharge record not found for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+                return Ok(());
+            }
+        };
+
+        // 检查是否已经处理过
+        if recharge_record.status == RechargeStatus::Succeeded {
+            log::info!("Payment already processed for payment_intent_id: {}", payment_intent_id);
+            return Ok(());
+        }
+
+        // 更新充值记录状态
+        let success_status = RechargeStatus::Succeeded.to_string();
+        sqlx::query!(
+            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE id = ?",
+            success_status,
+            "succeeded",
+            recharge_record.id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        // 更新用户余额
+        sqlx::query!(
+            "UPDATE users SET balance = balance + ? WHERE id = ?",
+            recharge_record.total_amount,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        log::info!(
+            "Successfully processed payment webhook for user {} with amount {}", 
+            user_id, 
+            recharge_record.total_amount.unwrap_or(0)
+        );
+
+        Ok(())
+    }
+
+    /// 处理Stripe webhook支付失败事件
+    ///
+    /// # 参数
+    ///
+    /// * `payment_intent_id` - Stripe支付意图ID
+    /// * `user_id` - 用户ID
+    pub async fn handle_payment_failure_webhook(
+        &self,
+        payment_intent_id: &str,
+        user_id: i64,
+    ) -> AppResult<()> {
+        // 更新充值记录状态为失败
+        let failed_status = RechargeStatus::Failed.to_string();
+        let result = sqlx::query!(
+            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE stripe_payment_intent_id = ? AND user_id = ?",
+            failed_status,
+            "failed",
+            payment_intent_id,
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            log::info!("Marked payment as failed for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+        } else {
+            log::warn!("No recharge record found to mark as failed for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+        }
+
+        Ok(())
+    }
+
+    /// 处理Stripe webhook支付取消事件
+    ///
+    /// # 参数
+    ///
+    /// * `payment_intent_id` - Stripe支付意图ID
+    /// * `user_id` - 用户ID
+    pub async fn handle_payment_canceled_webhook(
+        &self,
+        payment_intent_id: &str,
+        user_id: i64,
+    ) -> AppResult<()> {
+        // 更新充值记录状态为取消
+        let canceled_status = RechargeStatus::Canceled.to_string();
+        let result = sqlx::query!(
+            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE stripe_payment_intent_id = ? AND user_id = ?",
+            canceled_status,
+            "canceled",
+            payment_intent_id,
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            log::info!("Marked payment as canceled for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+        } else {
+            log::warn!("No recharge record found to mark as canceled for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+        }
+
+        Ok(())
+    }
 }
