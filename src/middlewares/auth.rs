@@ -25,6 +25,7 @@ impl PublicPaths {
                 "/api-docs/",
                 "/api/v1/auth/",
                 "/api/v1/admin/", // 添加admin路径为公开访问
+                "/webhook/",
             ],
             // 需要排除的路径（即使在公开前缀下也需要认证）
             excluded_paths: vec!["/api/v1/auth/refresh", "/api/v1/auth/logout"],

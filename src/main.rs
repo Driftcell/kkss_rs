@@ -57,7 +57,7 @@ async fn main() -> std::io::Result<()> {
     let user_service = UserService::new(pool.clone());
     let order_service = OrderService::new(pool.clone());
     let discount_code_service = DiscountCodeService::new(pool.clone(), sevencloud_api.clone());
-    let recharge_service = RechargeService::new(pool.clone(), stripe_service);
+    let recharge_service = RechargeService::new(pool.clone(), stripe_service.clone());
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
 
     // 启动HTTP服务器
@@ -73,6 +73,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(order_service.clone()))
             .app_data(web::Data::new(discount_code_service.clone()))
             .app_data(web::Data::new(recharge_service.clone()))
+            .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(sync_service.clone()))
             .configure(swagger_config)
             .configure(handlers::webhook_config)
