@@ -80,7 +80,17 @@ impl DiscountCodeService {
         request: RedeemDiscountCodeRequest,
     ) -> AppResult<RedeemDiscountCodeResponse> {
         // 验证兑换金额
-        let sweet_cash_needed = request.discount_amount;
+        let allowed = [(5, 5), (10, 8), (20, 12), (25, 15)];
+        let mut stamps_required: Option<i64> = None;
+        for (value_dollars, stamps) in allowed {
+            if request.discount_amount == (value_dollars * 100) as i64 {
+                stamps_required = Some(stamps as i64);
+                break;
+            }
+        }
+
+        let stamps_needed = stamps_required
+            .ok_or_else(|| AppError::ValidationError("Unsupported discount amount".to_string()))?;
 
         // 验证有效期
         if request.expire_months < 1 || request.expire_months > 3 {
@@ -92,21 +102,22 @@ impl DiscountCodeService {
         // 开始事务
         let mut tx = self.pool.begin().await?;
 
-        // 检查用户甜品现金余额
-        let user = sqlx::query!("SELECT sweet_cash FROM users WHERE id = ?", user_id)
+        // 检查用户 stamps 余额
+        let user = sqlx::query!("SELECT stamps FROM users WHERE id = ?", user_id)
             .fetch_optional(&mut *tx)
             .await?;
 
         let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+        let current_stamps = user.stamps.unwrap_or(0);
 
-        if user.sweet_cash.unwrap_or(0) < sweet_cash_needed {
-            return Err(AppError::ValidationError("Insufficient sweet cash balance".to_string()));
+        if current_stamps < stamps_needed {
+            return Err(AppError::ValidationError("Insufficient stamps".to_string()));
         }
 
-        // 扣除甜品现金
+        // 扣除 stamps
         sqlx::query!(
-            "UPDATE users SET sweet_cash = sweet_cash - ? WHERE id = ?",
-            sweet_cash_needed,
+            "UPDATE users SET stamps = stamps - ? WHERE id = ?",
+            stamps_needed,
             user_id
         )
         .execute(&mut *tx)
@@ -142,29 +153,6 @@ impl DiscountCodeService {
         .await?
         .last_insert_rowid();
 
-        // 记录甜品现金交易
-        let remaining_sweet_cash = user.sweet_cash.unwrap_or(0) - sweet_cash_needed;
-        let transaction_type_str = TransactionType::Redeem.to_string();
-        let negative_amount = -sweet_cash_needed;
-        let description = format!("Redeemed {} cents discount code", request.discount_amount);
-
-        sqlx::query!(
-            r#"
-            INSERT INTO sweet_cash_transactions (
-                user_id, transaction_type, amount, balance_after,
-                related_discount_code_id, description
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            "#,
-            user_id,
-            transaction_type_str,
-            negative_amount,
-            remaining_sweet_cash,
-            discount_code_id,
-            description
-        )
-        .execute(&mut *tx)
-        .await?;
-
         tx.commit().await?;
 
         // 返回结果
@@ -180,8 +168,8 @@ impl DiscountCodeService {
 
         Ok(RedeemDiscountCodeResponse {
             discount_code,
-            sweet_cash_used: sweet_cash_needed,
-            remaining_sweet_cash,
+            stamps_used: stamps_needed,
+            remaining_stamps: current_stamps - stamps_needed,
         })
     }
 }

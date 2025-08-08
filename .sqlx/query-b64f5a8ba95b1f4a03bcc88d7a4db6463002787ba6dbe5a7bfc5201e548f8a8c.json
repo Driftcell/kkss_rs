@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id, member_code, phone, username, password_hash, birthday,\n                member_type as \"member_type: MemberType\",\n                balance, sweet_cash, referrer_id, referral_code,\n                created_at, updated_at\n            FROM users\n            WHERE id = ?\n            ",
+  "query": "\n            SELECT\n                id, member_code, phone, username, password_hash, birthday,\n                member_type as \"member_type: MemberType\",\n                balance, stamps, referrer_id, referral_code,\n                created_at, updated_at\n            FROM users\n            WHERE referrer_id = ?\n            ORDER BY created_at DESC\n            LIMIT ? OFFSET ?\n            ",
   "describe": {
     "columns": [
       {
@@ -44,7 +44,7 @@
         "type_info": "Integer"
       },
       {
-        "name": "sweet_cash",
+        "name": "stamps",
         "ordinal": 8,
         "type_info": "Integer"
       },
@@ -70,7 +70,7 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 3
     },
     "nullable": [
       false,
@@ -88,5 +88,5 @@
       true
     ]
   },
-  "hash": "4860118f09656efd071990df838e674d9533e7e05df035f526045e6f2f854acb"
+  "hash": "b64f5a8ba95b1f4a03bcc88d7a4db6463002787ba6dbe5a7bfc5201e548f8a8c"
 }

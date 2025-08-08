@@ -22,7 +22,7 @@ impl UserService {
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
                 member_type as "member_type: MemberType",
-                balance, sweet_cash, referrer_id, referral_code,
+                balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
             WHERE id = ?
@@ -148,7 +148,7 @@ impl UserService {
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
                 member_type as "member_type: MemberType",
-                balance, sweet_cash, referrer_id, referral_code,
+                balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
             WHERE referrer_id = ?
@@ -179,7 +179,7 @@ impl UserService {
             SELECT 
                 COUNT(*) as total_orders,
                 COALESCE(SUM(price), 0) as total_spent,
-                COALESCE(SUM(sweet_cash_earned), 0) as total_earned_sweet_cash
+                COALESCE(SUM(stamps_earned), 0) as total_earned_stamps
             FROM orders 
             WHERE user_id = ?
             "#,
@@ -203,7 +203,7 @@ impl UserService {
         Ok(UserStatistics {
             total_orders: order_stats.total_orders,
             total_spent: order_stats.total_spent,
-            total_earned_sweet_cash: order_stats.total_earned_sweet_cash,
+            total_earned_stamps: order_stats.total_earned_stamps,
             available_discount_codes: available_codes.count,
         })
     }

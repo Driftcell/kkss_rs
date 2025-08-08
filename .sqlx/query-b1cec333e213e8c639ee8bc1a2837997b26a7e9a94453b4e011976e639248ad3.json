@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id, user_id, member_code, price, product_name, product_no,\n                order_status, pay_type, sweet_cash_earned,\n                external_created_at, created_at, updated_at\n            FROM orders\n            WHERE user_id = ?\n            ORDER BY external_created_at DESC\n            LIMIT ? OFFSET ?\n            ",
+  "query": "\n            SELECT\n                id, user_id, member_code, price, product_name, product_no,\n                order_status, pay_type, stamps_earned,\n                external_created_at, created_at, updated_at\n            FROM orders\n            WHERE user_id = ?\n            ORDER BY external_created_at DESC\n            LIMIT ? OFFSET ?\n            ",
   "describe": {
     "columns": [
       {
@@ -44,7 +44,7 @@
         "type_info": "Integer"
       },
       {
-        "name": "sweet_cash_earned",
+        "name": "stamps_earned",
         "ordinal": 8,
         "type_info": "Integer"
       },
@@ -82,5 +82,5 @@
       true
     ]
   },
-  "hash": "5cc402696f886ff5b191659d8f599126ff5050d675163aa7b8d3fe7d697488e4"
+  "hash": "b1cec333e213e8c639ee8bc1a2837997b26a7e9a94453b4e011976e639248ad3"
 }

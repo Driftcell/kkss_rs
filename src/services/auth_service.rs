@@ -203,7 +203,7 @@ impl AuthService {
             SELECT
                 id as "id!: i64", member_code, phone, username, password_hash, birthday,
                 member_type as "member_type: MemberType",
-                balance, sweet_cash, referrer_id, referral_code,
+                balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
             WHERE phone = ?
@@ -311,7 +311,7 @@ impl AuthService {
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
                 member_type as "member_type: MemberType",
-                balance, sweet_cash, referrer_id, referral_code,
+                balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
             WHERE id = ?

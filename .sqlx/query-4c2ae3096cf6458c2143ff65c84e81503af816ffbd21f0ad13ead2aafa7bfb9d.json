@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT sweet_cash FROM users WHERE id = ?",
+  "query": "SELECT id as \"id!: i64\" FROM users WHERE member_code = ?",
   "describe": {
     "columns": [
       {
-        "name": "sweet_cash",
+        "name": "id!: i64",
         "ordinal": 0,
         "type_info": "Integer"
       }
@@ -16,5 +16,5 @@
       true
     ]
   },
-  "hash": "171fb4d88adc664a3f014fd119947c7afd9ca9f44d3ead6fc7beb6b6cc7014c7"
+  "hash": "4c2ae3096cf6458c2143ff65c84e81503af816ffbd21f0ad13ead2aafa7bfb9d"
 }

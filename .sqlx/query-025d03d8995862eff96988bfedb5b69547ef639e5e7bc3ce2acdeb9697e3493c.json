@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET stamps = stamps - ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "025d03d8995862eff96988bfedb5b69547ef639e5e7bc3ce2acdeb9697e3493c"
+}

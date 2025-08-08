@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT \n                COUNT(*) as total_orders,\n                COALESCE(SUM(price), 0) as total_spent,\n                COALESCE(SUM(sweet_cash_earned), 0) as total_earned_sweet_cash\n            FROM orders \n            WHERE user_id = ?\n            ",
+  "query": "\n            SELECT \n                COUNT(*) as total_orders,\n                COALESCE(SUM(price), 0) as total_spent,\n                COALESCE(SUM(stamps_earned), 0) as total_earned_stamps\n            FROM orders \n            WHERE user_id = ?\n            ",
   "describe": {
     "columns": [
       {
@@ -14,7 +14,7 @@
         "type_info": "Integer"
       },
       {
-        "name": "total_earned_sweet_cash",
+        "name": "total_earned_stamps",
         "ordinal": 2,
         "type_info": "Integer"
       }
@@ -28,5 +28,5 @@
       false
     ]
   },
-  "hash": "6330a1ac02d7852f23194fa5445e02abee6a5c423a1ebd919b428d0652ffcb27"
+  "hash": "ef5294a710a01facbe4f61cded5a72a50047fc07d1b6c6f745dbc99d1ea0b67d"
 }

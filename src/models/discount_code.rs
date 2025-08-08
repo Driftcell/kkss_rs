@@ -66,8 +66,8 @@ pub struct RedeemDiscountCodeRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RedeemDiscountCodeResponse {
     pub discount_code: DiscountCodeResponse,
-    pub sweet_cash_used: i64,
-    pub remaining_sweet_cash: i64,
+    pub stamps_used: i64,
+    pub remaining_stamps: i64,
 }
 
 impl From<DiscountCode> for DiscountCodeResponse {

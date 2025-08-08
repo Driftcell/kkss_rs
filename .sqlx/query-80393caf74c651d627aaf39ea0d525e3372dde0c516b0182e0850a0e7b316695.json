@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT stamps FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "stamps",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "80393caf74c651d627aaf39ea0d525e3372dde0c516b0182e0850a0e7b316695"
+}

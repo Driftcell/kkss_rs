@@ -35,7 +35,7 @@ pub struct User {
     pub birthday: NaiveDate,
     pub member_type: MemberType,
     pub balance: Option<i64>,    // 余额(美分)
-    pub sweet_cash: Option<i64>, // 甜品现金(美分)
+    pub stamps: Option<i64>,     // Stamps 数量
     pub referrer_id: Option<i64>,
     pub referral_code: Option<String>,
     pub created_at: Option<NaiveDateTime>,
@@ -84,7 +84,7 @@ pub struct UserResponse {
     pub birthday: String,
     pub member_type: MemberType,
     pub balance: i64,
-    pub sweet_cash: i64,
+    pub stamps: i64,
     pub referral_code: Option<String>,
     pub total_referrals: i64,
     pub created_at: DateTime<Utc>,
@@ -94,7 +94,7 @@ pub struct UserResponse {
 pub struct UserStatistics {
     pub total_orders: i64,
     pub total_spent: i64,
-    pub total_earned_sweet_cash: i64,
+    pub total_earned_stamps: i64,
     pub available_discount_codes: i64,
 }
 
@@ -127,7 +127,7 @@ impl From<User> for UserResponse {
             birthday: user.birthday.format("%Y-%m-%d").to_string(),
             member_type: user.member_type,
             balance: user.balance.unwrap_or(0),
-            sweet_cash: user.sweet_cash.unwrap_or(0),
+            stamps: user.stamps.unwrap_or(0),
             referral_code: user.referral_code,
             total_referrals: 0, // 需要单独查询
             created_at: user

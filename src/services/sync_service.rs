@@ -59,21 +59,19 @@ impl SyncService {
         };
 
         if let Some(user) = user {
-            let price_cents = (order_record.price.unwrap_or(0.0) * 100.0) as i64;
-            let sweet_cash_earned = price_cents / 2; // 每消费1美元获得0.5美元甜品现金
-
             // 开始事务
             let mut tx = self.pool.begin().await?;
 
             // 插入订单记录
             let created_at = chrono::DateTime::from_timestamp_millis(order_record.create_date)
                 .unwrap_or_default();
+            let price_cents: i64 = (order_record.price.unwrap_or(0.0) * 100.0) as i64;
 
             sqlx::query!(
                 r#"
                 INSERT INTO orders (
                     id, user_id, member_code, price, product_name, product_no,
-                    order_status, pay_type, sweet_cash_earned, external_created_at
+                    order_status, pay_type, stamps_earned, external_created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
                 order_record.id,
@@ -84,43 +82,16 @@ impl SyncService {
                 order_record.product_no,
                 order_record.status,
                 order_record.pay_type,
-                sweet_cash_earned,
+                1,
                 created_at
             )
             .execute(&mut *tx)
             .await?;
 
-            // 更新用户甜品现金
+            // 新订单 +1 个 stamp
             sqlx::query!(
-                "UPDATE users SET sweet_cash = sweet_cash + ? WHERE id = ?",
-                sweet_cash_earned,
+                "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = ?",
                 user.id
-            )
-            .execute(&mut *tx)
-            .await?;
-
-            // 记录甜品现金交易
-            let balance_after = sqlx::query!("SELECT sweet_cash FROM users WHERE id = ?", user.id)
-                .fetch_one(&mut *tx)
-                .await?
-                .sweet_cash;
-
-            let transaction_type_str = TransactionType::Earn.to_string();
-            let description = format!("Order {} reward", order_record.id);
-
-            sqlx::query!(
-                r#"
-                INSERT INTO sweet_cash_transactions (
-                    user_id, transaction_type, amount, balance_after,
-                    related_order_id, description
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                "#,
-                user.id,
-                transaction_type_str,
-                sweet_cash_earned,
-                balance_after,
-                order_record.id,
-                description
             )
             .execute(&mut *tx)
             .await?;
@@ -128,10 +99,10 @@ impl SyncService {
             tx.commit().await?;
 
             log::info!(
-                "Successfully processed order: {}, User: {:?}, Sweet cash reward: {}",
+                "Successfully processed order: {}, User: {:?}, Stamps reward: {}",
                 order_record.id,
                 user.id,
-                sweet_cash_earned
+                1
             );
         } else {
             log::debug!("Order has no associated user, skipping: {}", order_record.id);

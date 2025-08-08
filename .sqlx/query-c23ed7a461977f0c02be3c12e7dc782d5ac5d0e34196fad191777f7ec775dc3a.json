@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO verification_codes (phone, code, expires_at) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "c23ed7a461977f0c02be3c12e7dc782d5ac5d0e34196fad191777f7ec775dc3a"
+}

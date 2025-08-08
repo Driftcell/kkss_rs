@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "be289f98572ed584760de9c515631152a3b4f54bc5a99e4304a39a2103dee7f8"
+}

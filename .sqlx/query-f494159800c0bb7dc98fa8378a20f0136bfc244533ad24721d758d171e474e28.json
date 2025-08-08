@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id as \"id!: i64\", member_code, phone, username, password_hash, birthday,\n                member_type as \"member_type: MemberType\",\n                balance, sweet_cash, referrer_id, referral_code,\n                created_at, updated_at\n            FROM users\n            WHERE phone = ?\n            ",
+  "query": "\n            SELECT\n                id, member_code, phone, username, password_hash, birthday,\n                member_type as \"member_type: MemberType\",\n                balance, stamps, referrer_id, referral_code,\n                created_at, updated_at\n            FROM users\n            WHERE id = ?\n            ",
   "describe": {
     "columns": [
       {
-        "name": "id!: i64",
+        "name": "id",
         "ordinal": 0,
         "type_info": "Integer"
       },
@@ -44,7 +44,7 @@
         "type_info": "Integer"
       },
       {
-        "name": "sweet_cash",
+        "name": "stamps",
         "ordinal": 8,
         "type_info": "Integer"
       },
@@ -73,7 +73,7 @@
       "Right": 1
     },
     "nullable": [
-      true,
+      false,
       false,
       false,
       false,
@@ -88,5 +88,5 @@
       true
     ]
   },
-  "hash": "1a382349815cdb941db66f4b31f35cf966254c233015cbd23f08b301a1ac125d"
+  "hash": "f494159800c0bb7dc98fa8378a20f0136bfc244533ad24721d758d171e474e28"
 }

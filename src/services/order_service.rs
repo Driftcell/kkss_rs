@@ -57,7 +57,7 @@ impl OrderService {
             r#"
             SELECT
                 id, user_id, member_code, price, product_name, product_no,
-                order_status, pay_type, sweet_cash_earned,
+                order_status, pay_type, stamps_earned,
                 external_created_at, created_at, updated_at
             FROM orders
             WHERE user_id = ?
