@@ -1,5 +1,4 @@
 use actix_cors::Cors;
-use actix_web::http;
 
 pub fn create_cors() -> Cors {
     Cors::default()
@@ -8,10 +7,9 @@ pub fn create_cors() -> Cors {
             true
         })
         .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-        .allowed_headers(vec![
-            http::header::AUTHORIZATION,
-            http::header::ACCEPT,
-            http::header::CONTENT_TYPE,
-        ])
+        // 本地开发放宽，防止前端自定义 Header 导致预检失败
+        .allow_any_header()
+        // 如果前端使用 Cookie（如刷新令牌）、或需要携带凭据，需开启
+        .supports_credentials()
         .max_age(3600)
 }

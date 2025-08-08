@@ -6,6 +6,7 @@ use actix_web::{
 };
 use futures_util::future::LocalBoxFuture;
 use std::future::{Ready, ready};
+use actix_web::http::Method;
 
 // 公开路径配置
 struct PublicPaths {
@@ -104,6 +105,12 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        // 放行所有 CORS 预检请求
+        if req.method() == Method::OPTIONS {
+            let fut = self.service.call(req);
+            return Box::pin(async move { fut.await });
+        }
+
         // 检查是否为公开路径
         let path = req.path();
 
