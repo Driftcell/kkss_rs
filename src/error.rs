@@ -49,30 +49,43 @@ pub enum AppError {
 impl ResponseError for AppError {
     fn error_response(&self) -> HttpResponse {
         let (status_code, error_code, message) = match self {
-            AppError::ValidationError(msg) => (
-                actix_web::http::StatusCode::BAD_REQUEST,
-                "VALIDATION_ERROR",
-                msg,
-            ),
+            AppError::ValidationError(msg) => {
+                log::warn!("Validation error: {}", msg);
+                (
+                    actix_web::http::StatusCode::BAD_REQUEST,
+                    "VALIDATION_ERROR",
+                    msg,
+                )
+            }
             AppError::AuthError(msg) => {
+                log::warn!("Authentication error: {}", msg);
                 (actix_web::http::StatusCode::UNAUTHORIZED, "AUTH_ERROR", msg)
             }
             AppError::NotFound(msg) => (actix_web::http::StatusCode::NOT_FOUND, "NOT_FOUND", msg),
-            AppError::Forbidden => (
-                actix_web::http::StatusCode::FORBIDDEN,
-                "FORBIDDEN",
-                &"Forbidden".to_string(),
-            ),
-            AppError::PermissionDenied => (
-                actix_web::http::StatusCode::FORBIDDEN,
-                "FORBIDDEN",
-                &"Permission denied".to_string(),
-            ),
-            AppError::ExternalApiError(msg) => (
-                actix_web::http::StatusCode::BAD_GATEWAY,
-                "EXTERNAL_API_ERROR",
-                msg,
-            ),
+            AppError::Forbidden => {
+                log::warn!("Forbidden access");
+                (
+                    actix_web::http::StatusCode::FORBIDDEN,
+                    "FORBIDDEN",
+                    &"Forbidden".to_string(),
+                )
+            }
+            AppError::PermissionDenied => {
+                log::warn!("Permission denied");
+                (
+                    actix_web::http::StatusCode::FORBIDDEN,
+                    "FORBIDDEN",
+                    &"Permission denied".to_string(),
+                )
+            }
+            AppError::ExternalApiError(msg) => {
+                log::error!("External API error: {}", msg);
+                (
+                    actix_web::http::StatusCode::BAD_GATEWAY,
+                    "EXTERNAL_API_ERROR",
+                    msg,
+                )
+            }
             AppError::DatabaseError(err) => {
                 log::error!("Database error: {}", err);
                 (
