@@ -73,6 +73,7 @@ impl Modify for SecurityAddon {
             ApiResponse<AuthResponse>,
             ApiResponse<SendCodeResponse>,
             ApiResponse<UserResponse>,
+            ApiResponse<PaginatedResponse<OrderResponse>>,
             ApiError,
         )
     ),

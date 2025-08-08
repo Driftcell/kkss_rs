@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     birthday DATE NOT NULL,
     member_type TEXT NOT NULL CHECK (member_type IN ('fan', 'sweet_shareholder', 'super_shareholder')),
     balance INTEGER DEFAULT 0,
-    sweet_cash INTEGER DEFAULT 0,
+    -- 将 sweet_cash 更名为 stamps 以与模型一致
+    stamps INTEGER DEFAULT 0,
     referrer_id INTEGER NULL,
     referral_code TEXT UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -26,7 +27,8 @@ CREATE TABLE IF NOT EXISTS orders (
     product_no TEXT,
     order_status INTEGER NOT NULL,
     pay_type INTEGER,
-    sweet_cash_earned INTEGER DEFAULT 0,
+    -- 将 sweet_cash_earned 更名为 stamps_earned 以与模型一致
+    stamps_earned INTEGER DEFAULT 0,
     external_created_at DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

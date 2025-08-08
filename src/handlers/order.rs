@@ -22,7 +22,7 @@ fn get_user_id_from_request(req: &HttpRequest) -> Option<i64> {
         ("bearer_auth" = [])
     ),
     responses(
-        (status = 200, description = "获取订单列表成功"),
+        (status = 200, description = "获取订单列表成功", body = ApiResponse<PaginatedResponse<OrderResponse>>),
         (status = 401, description = "未授权")
     )
 )]

@@ -1,0 +1,1 @@
+(which sqlx >/dev/null 2>&1 || cargo install sqlx-cli --no-default-features --features sqlite) && DATABASE_URL="sqlite://./kkss.db" sqlx database create && DATABASE_URL="sqlite://./kkss.db" sqlx migrate run --source migrations
