@@ -53,8 +53,8 @@ impl RechargeService {
             )
             .await?;
 
-        // 保存充值记录
-        let status_str = RechargeStatus::Pending.to_string();
+    // 保存充值记录 (直接绑定枚举到 ENUM 列)
+    let status = RechargeStatus::Pending;
         let payment_intent_id_str = payment_intent.id.to_string();
         sqlx::query!(
             r#"
@@ -68,7 +68,7 @@ impl RechargeService {
             request.amount,
             bonus_amount,
             total_amount,
-            status_str
+            status as _
         )
         .execute(&self.pool)
         .await?;
@@ -132,11 +132,11 @@ impl RechargeService {
             });
         }
 
-        // 更新充值记录状态
-        let success_status = RechargeStatus::Succeeded.to_string();
+        // 更新充值记录状态 (使用枚举)
+        let success_status = RechargeStatus::Succeeded;
         let stripe_status_str = format!("{:?}", payment_intent.status);
         sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE id = $3")
-            .bind(&success_status)
+            .bind(success_status)
             .bind(&stripe_status_str)
             .bind(recharge_record.id)
             .execute(&mut *tx)
@@ -261,9 +261,9 @@ impl RechargeService {
         }
 
         // 更新充值记录状态
-        let success_status = RechargeStatus::Succeeded.to_string();
+        let success_status = RechargeStatus::Succeeded;
         sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE id = $3")
-            .bind(&success_status)
+            .bind(success_status)
             .bind("succeeded")
             .bind(recharge_record.id)
             .execute(&mut *tx)
@@ -299,9 +299,9 @@ impl RechargeService {
         user_id: i64,
     ) -> AppResult<()> {
         // 更新充值记录状态为失败
-        let failed_status = RechargeStatus::Failed.to_string();
+        let failed_status = RechargeStatus::Failed;
         let result = sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4")
-            .bind(&failed_status)
+            .bind(failed_status)
             .bind("failed")
             .bind(payment_intent_id)
             .bind(user_id)
@@ -329,9 +329,9 @@ impl RechargeService {
         user_id: i64,
     ) -> AppResult<()> {
         // 更新充值记录状态为取消
-        let canceled_status = RechargeStatus::Canceled.to_string();
+        let canceled_status = RechargeStatus::Canceled;
         let result = sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4")
-            .bind(&canceled_status)
+            .bind(canceled_status)
             .bind("canceled")
             .bind(payment_intent_id)
             .bind(user_id)

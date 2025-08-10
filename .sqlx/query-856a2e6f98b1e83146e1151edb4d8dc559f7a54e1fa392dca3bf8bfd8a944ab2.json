@@ -36,7 +36,18 @@
       {
         "ordinal": 6,
         "name": "member_type: MemberType",
-        "type_info": "Text"
+        "type_info": {
+          "Custom": {
+            "name": "member_type",
+            "kind": {
+              "Enum": [
+                "fan",
+                "sweet_shareholder",
+                "super_shareholder"
+              ]
+            }
+          }
+        }
       },
       {
         "ordinal": 7,

@@ -20,7 +20,7 @@ impl UserService {
             r#"
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: _",
+                member_type,
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
@@ -143,7 +143,7 @@ impl UserService {
             r#"
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: _",
+                member_type,
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users

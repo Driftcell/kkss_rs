@@ -42,7 +42,7 @@ impl DiscountCodeService {
             r#"
             SELECT
                 id, user_id, code, discount_amount,
-                code_type as "code_type: _",
+                code_type,
                 is_used, used_at, expires_at, external_id,
                 created_at, updated_at
             FROM discount_codes
@@ -130,7 +130,7 @@ impl DiscountCodeService {
         }
 
         // 保存优惠码到本地数据库
-        let code_type_str = CodeType::Redeemed.to_string();
+    let code_type_enum = CodeType::Redeemed;
         let discount_code_id: i64 = sqlx::query_scalar(
             r#"
             INSERT INTO discount_codes (
@@ -142,7 +142,7 @@ impl DiscountCodeService {
         .bind(user_id)
         .bind(&code)
         .bind(request.discount_amount)
-        .bind(&code_type_str)
+    .bind(code_type_enum)
         .bind(expires_at)
         .fetch_one(&mut *tx)
         .await?;

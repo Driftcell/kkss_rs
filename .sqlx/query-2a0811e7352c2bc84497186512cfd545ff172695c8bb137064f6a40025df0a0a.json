@@ -10,7 +10,19 @@
         "Int8",
         "Int8",
         "Int8",
-        "Text"
+        {
+          "Custom": {
+            "name": "recharge_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ]
+            }
+          }
+        }
       ]
     },
     "nullable": []

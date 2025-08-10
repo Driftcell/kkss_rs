@@ -138,7 +138,6 @@ impl AuthService {
         let referral_code = generate_unique_referral_code(&self.pool).await?;
 
         // 插入用户
-        let member_type_str = member_type.to_string();
         let user_id: i64 = sqlx::query_scalar!(
             r#"
             INSERT INTO users (
@@ -152,7 +151,7 @@ impl AuthService {
             request.username,
             password_hash,
             birthday,
-            member_type_str,
+            member_type as _ ,
             referrer_id,
             referral_code
         )

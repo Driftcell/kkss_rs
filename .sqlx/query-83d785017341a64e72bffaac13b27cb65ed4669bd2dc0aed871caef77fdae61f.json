@@ -16,7 +16,18 @@
         "Text",
         "Text",
         "Date",
-        "Text",
+        {
+          "Custom": {
+            "name": "member_type",
+            "kind": {
+              "Enum": [
+                "fan",
+                "sweet_shareholder",
+                "super_shareholder"
+              ]
+            }
+          }
+        },
         "Int8",
         "Text"
       ]
