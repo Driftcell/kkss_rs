@@ -20,6 +20,7 @@ RUN mkdir -p src && echo "fn main(){}" > src/main.rs && \
 # 2. Copy real source & migrations
 COPY src ./src
 COPY migrations ./migrations
+COPY .sqlx ./.sqlx
 
 # 3. Enable offline mode & perform final release build using generated sqlx-data.json
 ENV SQLX_OFFLINE=1
