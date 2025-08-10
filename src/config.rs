@@ -53,38 +53,78 @@ pub struct SevenCloudConfig {
 impl Config {
     pub fn from_toml() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = env::var("CONFIG_PATH").unwrap_or_else(|_| "config.toml".to_string());
+        use std::io::ErrorKind;
 
-        let config_str = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("无法读取配置文件 {}: {}", config_path, e))?;
+        // 尝试读取配置文件，如果不存在则完全依赖环境变量
+        let config_result = std::fs::read_to_string(&config_path);
 
-        let mut config: Config =
-            toml::from_str(&config_str).map_err(|e| format!("解析配置文件失败: {}", e))?;
+        let mut config: Config = match config_result {
+            Ok(config_str) => {
+                // 有配置文件：先解析再用环境变量覆盖
+                toml::from_str(&config_str)
+                    .map_err(|e| format!("解析配置文件失败: {}", e))?
+            }
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                // 无配置文件：使用环境变量与默认值构建
+                fn get_env(name: &str) -> Option<String> { env::var(name).ok() }
+                fn get_env_parse<T: std::str::FromStr>(name: &str, default: T) -> T { env::var(name).ok().and_then(|v| v.parse::<T>().ok()).unwrap_or(default) }
 
-        // 环境变量覆盖配置
-        if let Ok(database_url) = env::var("DATABASE_URL") {
-            config.database.url = database_url;
-        }
-        if let Ok(jwt_secret) = env::var("JWT_SECRET") {
-            config.jwt.secret = jwt_secret;
-        }
-        if let Ok(twilio_account_sid) = env::var("TWILIO_ACCOUNT_SID") {
-            config.twilio.account_sid = twilio_account_sid;
-        }
-        if let Ok(twilio_auth_token) = env::var("TWILIO_AUTH_TOKEN") {
-            config.twilio.auth_token = twilio_auth_token;
-        }
-        if let Ok(stripe_secret_key) = env::var("STRIPE_SECRET_KEY") {
-            config.stripe.secret_key = stripe_secret_key;
-        }
-        if let Ok(stripe_webhook_secret) = env::var("STRIPE_WEBHOOK_SECRET") {
-            config.stripe.webhook_secret = stripe_webhook_secret;
-        }
-        if let Ok(sevencloud_username) = env::var("SEVENCLOUD_USERNAME") {
-            config.sevencloud.username = sevencloud_username;
-        }
-        if let Ok(sevencloud_password) = env::var("SEVENCLOUD_PASSWORD") {
-            config.sevencloud.password = sevencloud_password;
-        }
+                // 数据库 URL 在无配置文件时必须提供
+                let database_url = get_env("DATABASE_URL").ok_or_else(||
+                    "缺少 DATABASE_URL 环境变量，且未找到配置文件 config.toml"
+                )?;
+
+                Config {
+                    server: ServerConfig {
+                        host: get_env("SERVER_HOST").unwrap_or_else(|| "0.0.0.0".to_string()),
+                        port: get_env_parse("SERVER_PORT", 8080u16),
+                    },
+                    database: DatabaseConfig {
+                        url: database_url,
+                        max_connections: get_env_parse("DB_MAX_CONNECTIONS", 10u32),
+                    },
+                    jwt: JwtConfig {
+                        secret: get_env("JWT_SECRET").unwrap_or_else(|| "change-me-in-production".to_string()),
+                        access_token_expires_in: get_env_parse("JWT_ACCESS_EXPIRES_IN", 7200i64),
+                        refresh_token_expires_in: get_env_parse("JWT_REFRESH_EXPIRES_IN", 2_592_000i64),
+                    },
+                    twilio: TwilioConfig {
+                        account_sid: get_env("TWILIO_ACCOUNT_SID").unwrap_or_default(),
+                        auth_token: get_env("TWILIO_AUTH_TOKEN").unwrap_or_default(),
+                        from_phone: get_env("TWILIO_FROM_PHONE").unwrap_or_default(),
+                    },
+                    stripe: StripeConfig {
+                        secret_key: get_env("STRIPE_SECRET_KEY").unwrap_or_default(),
+                        webhook_secret: get_env("STRIPE_WEBHOOK_SECRET").unwrap_or_default(),
+                    },
+                    sevencloud: SevenCloudConfig {
+                        username: get_env("SEVENCLOUD_USERNAME").unwrap_or_default(),
+                        password: get_env("SEVENCLOUD_PASSWORD").unwrap_or_default(),
+                        base_url: get_env("SEVENCLOUD_BASE_URL").unwrap_or_else(|| "https://sz.sunzee.com.cn".to_string()),
+                    },
+                }
+            }
+            Err(e) => {
+                return Err(format!("无法读取配置文件 {}: {}", config_path, e).into());
+            }
+        };
+
+        // 环境变量覆盖（即便文件存在时也覆盖）
+        if let Ok(v) = env::var("SERVER_HOST") { config.server.host = v; }
+        if let Ok(v) = env::var("SERVER_PORT") { if let Ok(p) = v.parse() { config.server.port = p; } }
+        if let Ok(v) = env::var("DATABASE_URL") { config.database.url = v; }
+        if let Ok(v) = env::var("DB_MAX_CONNECTIONS") { if let Ok(mc) = v.parse() { config.database.max_connections = mc; } }
+        if let Ok(v) = env::var("JWT_SECRET") { config.jwt.secret = v; }
+        if let Ok(v) = env::var("JWT_ACCESS_EXPIRES_IN") { if let Ok(n) = v.parse() { config.jwt.access_token_expires_in = n; } }
+        if let Ok(v) = env::var("JWT_REFRESH_EXPIRES_IN") { if let Ok(n) = v.parse() { config.jwt.refresh_token_expires_in = n; } }
+        if let Ok(v) = env::var("TWILIO_ACCOUNT_SID") { config.twilio.account_sid = v; }
+        if let Ok(v) = env::var("TWILIO_AUTH_TOKEN") { config.twilio.auth_token = v; }
+        if let Ok(v) = env::var("TWILIO_FROM_PHONE") { config.twilio.from_phone = v; }
+        if let Ok(v) = env::var("STRIPE_SECRET_KEY") { config.stripe.secret_key = v; }
+        if let Ok(v) = env::var("STRIPE_WEBHOOK_SECRET") { config.stripe.webhook_secret = v; }
+        if let Ok(v) = env::var("SEVENCLOUD_USERNAME") { config.sevencloud.username = v; }
+        if let Ok(v) = env::var("SEVENCLOUD_PASSWORD") { config.sevencloud.password = v; }
+        if let Ok(v) = env::var("SEVENCLOUD_BASE_URL") { config.sevencloud.base_url = v; }
 
         Ok(config)
     }
