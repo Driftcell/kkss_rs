@@ -1,6 +1,5 @@
 use crate::error::AppResult;
 use crate::external::*;
-use crate::models::*;
 use sqlx::SqlitePool;
 
 #[derive(Clone)]
