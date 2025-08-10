@@ -43,9 +43,6 @@ COPY --from=builder /build/target/release/kkss-backend ./kkss-backend
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Default environment variables (can be overridden at run time)
-ENV RUST_BACKTRACE=1
-
 # Create non-root user
 RUN useradd -u 10001 -ms /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
