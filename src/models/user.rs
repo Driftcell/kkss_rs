@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -38,8 +38,8 @@ pub struct User {
     pub stamps: Option<i64>,     // Stamps 数量
     pub referrer_id: Option<i64>,
     pub referral_code: Option<String>,
-    pub created_at: Option<NaiveDateTime>,
-    pub updated_at: Option<NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -130,10 +130,7 @@ impl From<User> for UserResponse {
             stamps: user.stamps.unwrap_or(0),
             referral_code: user.referral_code,
             total_referrals: 0, // 需要单独查询
-            created_at: user
-                .created_at
-                .map(|dt| dt.and_utc())
-                .unwrap_or_else(|| Utc::now()),
+            created_at: user.created_at.unwrap_or_else(|| Utc::now()),
         }
     }
 }

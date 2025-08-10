@@ -1,10 +1,10 @@
--- 创建短信验证码表
+-- 创建短信验证码表 (Postgres)
 CREATE TABLE IF NOT EXISTS verification_codes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     phone TEXT NOT NULL,
     code TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME NOT NULL
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
 );
 
 -- 创建索引

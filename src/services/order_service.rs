@@ -1,14 +1,14 @@
 use crate::error::AppResult;
 use crate::models::*;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct OrderService {
-    pool: SqlitePool,
+    pool: PgPool,
 }
 
 impl OrderService {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -43,31 +43,27 @@ impl OrderService {
         let _where_clause = where_conditions.join(" AND ");
 
         // 获取总数 - 简化查询
-        let total = sqlx::query!(
-            "SELECT COUNT(*) as count FROM orders WHERE user_id = ?",
-            user_id
-        )
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM orders WHERE user_id = $1")
+        .bind(user_id)
         .fetch_one(&self.pool)
-        .await?
-        .count;
+        .await?;
 
         // 获取订单列表 - 简化查询
-        let orders = sqlx::query_as!(
-            Order,
+        let orders = sqlx::query_as::<_, Order>(
             r#"
             SELECT
                 id, user_id, member_code, price, product_name, product_no,
                 order_status, pay_type, stamps_earned,
                 external_created_at, created_at, updated_at
             FROM orders
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY external_created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT $2 OFFSET $3
             "#,
-            user_id,
-            limit,
-            offset
         )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 

@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, user_id, member_code, price, product_name, product_no,\n                order_status, pay_type, stamps_earned,\n                external_created_at, created_at, updated_at\n            FROM orders\n            WHERE user_id = $1\n            ORDER BY external_created_at DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "product_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "product_no",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "order_status",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "pay_type",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "stamps_earned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "external_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "06cfd6c922810fc92f91c76843e16ab8eb746253e55497993ee9dddc2639ea8e"
+}

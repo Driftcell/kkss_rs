@@ -2,14 +2,14 @@ use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
 use crate::utils::*;
-use chrono::{DateTime, Duration, Utc};
-use sqlx::SqlitePool;
+use chrono::{Duration, Utc};
+use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AuthService {
-    pool: SqlitePool,
+    pool: PgPool,
     jwt_service: JwtService,
     twilio_service: TwilioService,
     sevencloud_api: Arc<Mutex<SevenCloudAPI>>,
@@ -17,7 +17,7 @@ pub struct AuthService {
 
 impl AuthService {
     pub fn new(
-        pool: SqlitePool,
+        pool: PgPool,
         jwt_service: JwtService,
         twilio_service: TwilioService,
         sevencloud_api: Arc<Mutex<SevenCloudAPI>>,
@@ -36,7 +36,7 @@ impl AuthService {
 
         // 检查发送频率限制 (60秒内最多1次)
         let last_code = sqlx::query!(
-            "SELECT created_at FROM verification_codes WHERE phone = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT created_at FROM verification_codes WHERE phone = $1 ORDER BY created_at DESC LIMIT 1",
             phone
         )
         .fetch_optional(&self.pool)
@@ -46,8 +46,7 @@ impl AuthService {
             let now = Utc::now();
             // created_at在SQLite中返回为NaiveDateTime，需要处理Option
             if let Some(created_at) = last_code.created_at {
-                let last_sent = DateTime::<Utc>::from_naive_utc_and_offset(created_at, Utc);
-                if now.signed_duration_since(last_sent) < Duration::seconds(60) {
+                    if now.signed_duration_since(created_at) < Duration::seconds(60) {
                     return Err(AppError::ValidationError(
                         "The verification code has been sent too frequently, please try again after 60 seconds.".to_string(),
                     ));
@@ -66,7 +65,7 @@ impl AuthService {
 
         // 存储验证码到数据库
         sqlx::query!(
-            "INSERT INTO verification_codes (phone, code, expires_at) VALUES (?, ?, ?)",
+            "INSERT INTO verification_codes (phone, code, expires_at) VALUES ($1, $2, $3)",
             phone,
             code,
             expires_at
@@ -87,7 +86,7 @@ impl AuthService {
             .await?;
 
         // 检查手机号是否已注册
-        let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = ?", request.phone)
+    let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = $1", request.phone)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -104,7 +103,7 @@ impl AuthService {
 
         // 检查会员号是否已存在（防止重复注册）
         let existing_member =
-            sqlx::query!("SELECT id FROM users WHERE member_code = ?", member_code)
+            sqlx::query!("SELECT id FROM users WHERE member_code = $1", member_code)
                 .fetch_optional(&self.pool)
                 .await?;
 
@@ -120,7 +119,7 @@ impl AuthService {
         // 处理推荐人
         let (referrer_id, member_type) = if let Some(referrer_code) = &request.referrer_code {
             let referrer = sqlx::query!(
-                "SELECT id as \"id!: i64\" FROM users WHERE member_code = ?",
+                "SELECT id as \"id!: i64\" FROM users WHERE member_code = $1",
                 referrer_code
             )
             .fetch_optional(&self.pool)
@@ -140,12 +139,13 @@ impl AuthService {
 
         // 插入用户
         let member_type_str = member_type.to_string();
-        let user_id = sqlx::query!(
+        let user_id: i64 = sqlx::query_scalar!(
             r#"
             INSERT INTO users (
                 member_code, phone, username, password_hash, birthday,
                 member_type, referrer_id, referral_code
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
             "#,
             member_code,
             request.phone,
@@ -156,9 +156,8 @@ impl AuthService {
             referrer_id,
             referral_code
         )
-        .execute(&self.pool)
-        .await?
-        .last_insert_rowid();
+        .fetch_one(&self.pool)
+        .await?;
 
         // 根据是否有推荐人发放不同的优惠码
         if let Some(referrer_user_id) = referrer_id {
@@ -206,7 +205,7 @@ impl AuthService {
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
-            WHERE phone = ?
+            WHERE phone = $1
             "#,
             request.phone
         )
@@ -268,7 +267,7 @@ impl AuthService {
     async fn verify_code(&self, phone: &str, code: &str) -> AppResult<()> {
         // 查找最新的有效验证码
         let verification_code = sqlx::query!(
-            "SELECT code, expires_at FROM verification_codes WHERE phone = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT code, expires_at FROM verification_codes WHERE phone = $1 ORDER BY created_at DESC LIMIT 1",
             phone
         )
         .fetch_optional(&self.pool)
@@ -276,8 +275,7 @@ impl AuthService {
 
         if let Some(stored_code) = verification_code {
             let now = Utc::now();
-            let expires_at =
-                DateTime::<Utc>::from_naive_utc_and_offset(stored_code.expires_at, Utc);
+                let expires_at = stored_code.expires_at;
 
             if now > expires_at {
                 return Err(AppError::ValidationError("The verification code has expired".to_string()));
@@ -289,7 +287,7 @@ impl AuthService {
 
             // 验证成功后删除已使用的验证码
             sqlx::query!(
-                "DELETE FROM verification_codes WHERE phone = ? AND code = ?",
+                "DELETE FROM verification_codes WHERE phone = $1 AND code = $2",
                 phone,
                 code
             )
@@ -314,7 +312,7 @@ impl AuthService {
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
-            WHERE id = ?
+            WHERE id = $1
             "#,
             user_id
         )
@@ -347,7 +345,7 @@ impl AuthService {
     // 清理过期的验证码
     pub async fn cleanup_expired_verification_codes(&self) -> AppResult<()> {
         let now = Utc::now();
-        sqlx::query!("DELETE FROM verification_codes WHERE expires_at < ?", now)
+    sqlx::query!("DELETE FROM verification_codes WHERE expires_at < $1", now)
             .execute(&self.pool)
             .await?;
         Ok(())

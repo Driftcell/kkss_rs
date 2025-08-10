@@ -44,7 +44,7 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Default environment variables (can be overridden at run time)
-ENV DATABASE_URL=sqlite://./kkss.db \
+ENV DATABASE_URL=postgres://postgres:postgres@postgres:5432/kkss \
 	RUST_LOG=debug \
 	CONFIG_PATH=/app/config.toml \
 	RUST_BACKTRACE=1

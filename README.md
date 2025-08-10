@@ -5,7 +5,7 @@
 ## 技术栈
 
 - **Web框架**: actix-web 4.x
-- **数据库**: SQLite (开发) / PostgreSQL (生产)
+- **数据库**: PostgreSQL
 - **ORM**: sqlx
 - **认证**: JWT
 - **外部服务**: Twilio (短信), Stripe (支付), 七云API
@@ -153,7 +153,7 @@ host = "0.0.0.0"
 port = 8080
 
 [database]
-url = "sqlite://./kkss.db"
+url = "postgres://postgres:postgres@localhost:5432/kkss"
 max_connections = 10
 
 [jwt]
@@ -198,6 +198,31 @@ base_url = "https://sz.sunzee.com.cn"
 - `discount_codes` - 优惠码表
 - `recharge_records` - 充值记录表
 - `sweet_cash_transactions` - 甜品现金交易记录表
+
+## 使用 Podman 启动 PostgreSQL
+
+```bash
+podman run -d \
+  --name kkss-postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=kkss \
+  -p 5432:5432 \
+  docker.io/library/postgres:16
+
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/kkss"
+
+# 初始化数据库并运行迁移
+scripts/init_db.sh
+
+# 运行服务
+cargo run
+```
+
+停止与移除容器：
+
+```bash
+podman stop kkss-postgres && podman rm kkss-postgres
+```
 
 详细的数据库结构请参考 `migrations/` 目录下的迁移文件。
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bdd5cd3c9b26845f590b3c0aa6f44b4f1967574ff6d205bd01f9656c766babda"
+}

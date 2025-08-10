@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -33,8 +33,9 @@ pub struct RechargeRecord {
     pub total_amount: Option<i64>, // 实际到账金额(美分)
     pub status: RechargeStatus,
     pub stripe_status: Option<String>,
-    pub created_at: Option<NaiveDateTime>,
-    pub updated_at: Option<NaiveDateTime>,
+    // Postgres 中使用 TIMESTAMPTZ -> DateTime<Utc>
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -88,7 +89,6 @@ impl From<RechargeRecord> for RechargeRecordResponse {
             status: record.status,
             created_at: record
                 .created_at
-                .map(|dt| dt.and_utc())
                 .unwrap_or_else(|| Utc::now()),
         }
     }

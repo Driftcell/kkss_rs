@@ -5,17 +5,17 @@ use crate::models::{
     PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecord, RechargeRecordResponse,
     RechargeStatus, calculate_bonus_amount,
 };
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use stripe::PaymentIntentStatus;
 
 #[derive(Clone)]
 pub struct RechargeService {
-    pool: SqlitePool,
+    pool: PgPool,
     stripe_service: StripeService,
 }
 
 impl RechargeService {
-    pub fn new(pool: SqlitePool, stripe_service: StripeService) -> Self {
+    pub fn new(pool: PgPool, stripe_service: StripeService) -> Self {
         Self {
             pool,
             stripe_service,
@@ -61,7 +61,7 @@ impl RechargeService {
             INSERT INTO recharge_records (
                 user_id, stripe_payment_intent_id, amount, bonus_amount,
                 total_amount, status
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             user_id,
             payment_intent_id_str,
@@ -101,19 +101,18 @@ impl RechargeService {
         let mut tx = self.pool.begin().await?;
 
         // 获取充值记录
-        let recharge_record = sqlx::query_as!(
-            RechargeRecord,
+        let recharge_record = sqlx::query_as::<_, RechargeRecord>(
             r#"
             SELECT
                 id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: RechargeStatus",
+                total_amount, status as "status: _",
                 stripe_status, created_at, updated_at
             FROM recharge_records
-            WHERE stripe_payment_intent_id = ? AND user_id = ?
+            WHERE stripe_payment_intent_id = $1 AND user_id = $2
             "#,
-            request.payment_intent_id,
-            user_id
         )
+        .bind(&request.payment_intent_id)
+        .bind(user_id)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -122,41 +121,39 @@ impl RechargeService {
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
-            let user = sqlx::query!("SELECT balance FROM users WHERE id = ?", user_id)
+            let current_balance: i64 = sqlx::query_scalar("SELECT balance FROM users WHERE id = $1")
+                .bind(user_id)
                 .fetch_one(&mut *tx)
                 .await?;
 
             return Ok(ConfirmRechargeResponse {
                 recharge_record: RechargeRecordResponse::from(recharge_record),
-                new_balance: user.balance.unwrap_or(0),
+                new_balance: current_balance,
             });
         }
 
         // 更新充值记录状态
         let success_status = RechargeStatus::Succeeded.to_string();
         let stripe_status_str = format!("{:?}", payment_intent.status);
-        sqlx::query!(
-            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE id = ?",
-            success_status,
-            stripe_status_str,
-            recharge_record.id
-        )
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE id = $3")
+            .bind(&success_status)
+            .bind(&stripe_status_str)
+            .bind(recharge_record.id)
+            .execute(&mut *tx)
+            .await?;
 
         // 更新用户余额
-        sqlx::query!(
-            "UPDATE users SET balance = balance + ? WHERE id = ?",
-            recharge_record.total_amount,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE users SET balance = balance + $1 WHERE id = $2")
+            .bind(recharge_record.total_amount)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
 
         // 获取新余额
-        let user = sqlx::query!("SELECT balance FROM users WHERE id = ?", user_id)
-            .fetch_one(&mut *tx)
-            .await?;
+    let current_balance: i64 = sqlx::query_scalar("SELECT balance FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_one(&mut *tx)
+        .await?;
 
         tx.commit().await?;
 
@@ -164,7 +161,7 @@ impl RechargeService {
 
         Ok(ConfirmRechargeResponse {
             recharge_record: RechargeRecordResponse::from(recharge_record),
-            new_balance: user.balance.unwrap_or(0),
+            new_balance: current_balance,
         })
     }
 
@@ -178,31 +175,27 @@ impl RechargeService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-        let total = sqlx::query!(
-            "SELECT COUNT(*) as count FROM recharge_records WHERE user_id = ?",
-            user_id
-        )
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recharge_records WHERE user_id = $1")
+        .bind(user_id)
         .fetch_one(&self.pool)
-        .await?
-        .count;
+        .await?;
 
         // 获取充值记录列表
-        let records = sqlx::query_as!(
-            RechargeRecord,
+        let records = sqlx::query_as::<_, RechargeRecord>(
             r#"
             SELECT
                 id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: RechargeStatus",
+                total_amount, status as "status: _",
                 stripe_status, created_at, updated_at
             FROM recharge_records
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT $2 OFFSET $3
             "#,
-            user_id,
-            limit,
-            offset
         )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -238,19 +231,18 @@ impl RechargeService {
         let mut tx = self.pool.begin().await?;
 
         // 获取充值记录
-        let recharge_record = sqlx::query_as!(
-            RechargeRecord,
+        let recharge_record = sqlx::query_as::<_, RechargeRecord>(
             r#"
             SELECT
                 id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: RechargeStatus",
+                total_amount, status as "status: _",
                 stripe_status, created_at, updated_at
             FROM recharge_records
-            WHERE stripe_payment_intent_id = ? AND user_id = ?
+            WHERE stripe_payment_intent_id = $1 AND user_id = $2
             "#,
-            payment_intent_id,
-            user_id
         )
+        .bind(payment_intent_id)
+        .bind(user_id)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -270,23 +262,19 @@ impl RechargeService {
 
         // 更新充值记录状态
         let success_status = RechargeStatus::Succeeded.to_string();
-        sqlx::query!(
-            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE id = ?",
-            success_status,
-            "succeeded",
-            recharge_record.id
-        )
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE id = $3")
+            .bind(&success_status)
+            .bind("succeeded")
+            .bind(recharge_record.id)
+            .execute(&mut *tx)
+            .await?;
 
         // 更新用户余额
-        sqlx::query!(
-            "UPDATE users SET balance = balance + ? WHERE id = ?",
-            recharge_record.total_amount,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE users SET balance = balance + $1 WHERE id = $2")
+            .bind(recharge_record.total_amount)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
 
@@ -312,15 +300,13 @@ impl RechargeService {
     ) -> AppResult<()> {
         // 更新充值记录状态为失败
         let failed_status = RechargeStatus::Failed.to_string();
-        let result = sqlx::query!(
-            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE stripe_payment_intent_id = ? AND user_id = ?",
-            failed_status,
-            "failed",
-            payment_intent_id,
-            user_id
-        )
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4")
+            .bind(&failed_status)
+            .bind("failed")
+            .bind(payment_intent_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() > 0 {
             log::info!("Marked payment as failed for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
@@ -344,15 +330,13 @@ impl RechargeService {
     ) -> AppResult<()> {
         // 更新充值记录状态为取消
         let canceled_status = RechargeStatus::Canceled.to_string();
-        let result = sqlx::query!(
-            "UPDATE recharge_records SET status = ?, stripe_status = ? WHERE stripe_payment_intent_id = ? AND user_id = ?",
-            canceled_status,
-            "canceled",
-            payment_intent_id,
-            user_id
-        )
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4")
+            .bind(&canceled_status)
+            .bind("canceled")
+            .bind(payment_intent_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() > 0 {
             log::info!("Marked payment as canceled for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);

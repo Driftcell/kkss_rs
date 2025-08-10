@@ -3,17 +3,17 @@ use crate::external::*;
 use crate::models::*;
 use crate::utils::generate_six_digit_code;
 use chrono::{Duration, Utc};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct DiscountCodeService {
-    pool: SqlitePool,
+    pool: PgPool,
     sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
 }
 
 impl DiscountCodeService {
     pub fn new(
-        pool: SqlitePool,
+        pool: PgPool,
         sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
     ) -> Self {
         Self {
@@ -32,32 +32,28 @@ impl DiscountCodeService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-        let total = sqlx::query!(
-            "SELECT COUNT(*) as count FROM discount_codes WHERE user_id = ?",
-            user_id
-        )
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM discount_codes WHERE user_id = $1")
+        .bind(user_id)
         .fetch_one(&self.pool)
-        .await?
-        .count;
+        .await?;
 
         // 获取优惠码列表
-        let discount_codes = sqlx::query_as!(
-            DiscountCode,
+        let discount_codes = sqlx::query_as::<_, DiscountCode>(
             r#"
             SELECT
                 id, user_id, code, discount_amount,
-                code_type as "code_type: CodeType",
+                code_type as "code_type: _",
                 is_used, used_at, expires_at, external_id,
                 created_at, updated_at
             FROM discount_codes
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT $2 OFFSET $3
             "#,
-            user_id,
-            limit,
-            offset
         )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -103,7 +99,7 @@ impl DiscountCodeService {
         let mut tx = self.pool.begin().await?;
 
         // 检查用户 stamps 余额
-        let user = sqlx::query!("SELECT stamps FROM users WHERE id = ?", user_id)
+    let user = sqlx::query!("SELECT stamps FROM users WHERE id = $1", user_id)
             .fetch_optional(&mut *tx)
             .await?;
 
@@ -115,11 +111,9 @@ impl DiscountCodeService {
         }
 
         // 扣除 stamps
-        sqlx::query!(
-            "UPDATE users SET stamps = stamps - ? WHERE id = ?",
-            stamps_needed,
-            user_id
-        )
+    sqlx::query("UPDATE users SET stamps = stamps - $1 WHERE id = $2")
+        .bind(stamps_needed)
+        .bind(user_id)
         .execute(&mut *tx)
         .await?;
 
@@ -137,21 +131,21 @@ impl DiscountCodeService {
 
         // 保存优惠码到本地数据库
         let code_type_str = CodeType::Redeemed.to_string();
-        let discount_code_id = sqlx::query!(
+        let discount_code_id: i64 = sqlx::query_scalar(
             r#"
             INSERT INTO discount_codes (
                 user_id, code, discount_amount, code_type, expires_at
-            ) VALUES (?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
             "#,
-            user_id,
-            code,
-            request.discount_amount,
-            code_type_str,
-            expires_at
         )
-        .execute(&mut *tx)
-        .await?
-        .last_insert_rowid();
+        .bind(user_id)
+        .bind(&code)
+        .bind(request.discount_amount)
+        .bind(&code_type_str)
+        .bind(expires_at)
+        .fetch_one(&mut *tx)
+        .await?;
 
         tx.commit().await?;
 

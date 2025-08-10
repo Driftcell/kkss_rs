@@ -1,16 +1,16 @@
 use crate::error::AppResult;
 use crate::external::*;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct SyncService {
-    pool: SqlitePool,
+    pool: PgPool,
     sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
 }
 
 impl SyncService {
     pub fn new(
-        pool: SqlitePool,
+        pool: PgPool,
         sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
     ) -> Self {
         Self {
@@ -39,7 +39,7 @@ impl SyncService {
 
     async fn process_order(&self, order_record: OrderRecord) -> AppResult<()> {
         // 检查订单是否已存在
-        let existing = sqlx::query!("SELECT id FROM orders WHERE id = ?", order_record.id)
+    let existing = sqlx::query!("SELECT id FROM orders WHERE id = $1", order_record.id)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -50,7 +50,7 @@ impl SyncService {
 
         // 根据会员号查找用户
         let user = if let Some(member_code) = &order_record.member_code {
-            sqlx::query!("SELECT id FROM users WHERE member_code = ?", member_code)
+            sqlx::query!("SELECT id FROM users WHERE member_code = $1", member_code)
                 .fetch_optional(&self.pool)
                 .await?
         } else {
@@ -71,7 +71,7 @@ impl SyncService {
                 INSERT INTO orders (
                     id, user_id, member_code, price, product_name, product_no,
                     order_status, pay_type, stamps_earned, external_created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 "#,
                 order_record.id,
                 user.id,
@@ -88,10 +88,7 @@ impl SyncService {
             .await?;
 
             // 新订单 +1 个 stamp
-            sqlx::query!(
-                "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = ?",
-                user.id
-            )
+            sqlx::query!("UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = $1", user.id)
             .execute(&mut *tx)
             .await?;
 

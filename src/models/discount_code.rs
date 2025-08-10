@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -31,11 +31,11 @@ pub struct DiscountCode {
     pub discount_amount: Option<i64>, // 优惠金额(美分)
     pub code_type: CodeType,
     pub is_used: Option<bool>,
-    pub used_at: Option<NaiveDateTime>,
-    pub expires_at: Option<NaiveDateTime>,
+    pub used_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
     pub external_id: Option<i64>, // 七云优惠码ID
-    pub created_at: Option<NaiveDateTime>,
-    pub updated_at: Option<NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -78,14 +78,8 @@ impl From<DiscountCode> for DiscountCodeResponse {
             discount_amount: code.discount_amount.unwrap_or(0),
             code_type: code.code_type,
             is_used: code.is_used.unwrap_or(false),
-            expires_at: code
-                .expires_at
-                .map(|dt| dt.and_utc())
-                .unwrap_or_else(|| Utc::now()),
-            created_at: code
-                .created_at
-                .map(|dt| dt.and_utc())
-                .unwrap_or_else(|| Utc::now()),
+            expires_at: code.expires_at.unwrap_or_else(|| Utc::now()),
+            created_at: code.created_at.unwrap_or_else(|| Utc::now()),
         }
     }
 }

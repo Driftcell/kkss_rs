@@ -1,14 +1,14 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct UserService {
-    pool: SqlitePool,
+    pool: PgPool,
 }
 
 impl UserService {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -16,38 +16,36 @@ impl UserService {
         &self,
         user_id: i64,
     ) -> AppResult<(UserResponse, UserStatistics)> {
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as::<_, User>(
             r#"
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: MemberType",
+                member_type as "member_type: _",
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
-            WHERE id = ?
+            WHERE id = $1
             "#,
-            user_id
         )
+        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
 
         let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         // 获取推荐人数
-        let total_referrals = sqlx::query!(
-            "SELECT COUNT(*) as count FROM users WHERE referrer_id = ?",
-            user_id
+        let total_referrals: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM users WHERE referrer_id = $1"
         )
+        .bind(user_id)
         .fetch_one(&self.pool)
-        .await?
-        .count;
+        .await?;
 
         // 获取用户统计信息
         let statistics = self.get_user_statistics(user_id).await?;
 
         let mut user_response = UserResponse::from(user);
-        user_response.total_referrals = total_referrals;
+    user_response.total_referrals = total_referrals;
 
         Ok((user_response, statistics))
     }
@@ -85,7 +83,7 @@ impl UserService {
             (Some(username), Some(birthday)) => {
                 // 同时更新用户名和生日
                 sqlx::query!(
-                    "UPDATE users SET username = ?, birthday = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    "UPDATE users SET username = $1, birthday = $2, updated_at = NOW() WHERE id = $3",
                     username,
                     birthday,
                     user_id
@@ -96,7 +94,7 @@ impl UserService {
             (Some(username), None) => {
                 // 只更新用户名
                 sqlx::query!(
-                    "UPDATE users SET username = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    "UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2",
                     username,
                     user_id
                 )
@@ -106,7 +104,7 @@ impl UserService {
             (None, Some(birthday)) => {
                 // 只更新生日
                 sqlx::query!(
-                    "UPDATE users SET birthday = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    "UPDATE users SET birthday = $1, updated_at = NOW() WHERE id = $2",
                     birthday,
                     user_id
                 )
@@ -133,32 +131,30 @@ impl UserService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-        let total = sqlx::query!(
-            "SELECT COUNT(*) as count FROM users WHERE referrer_id = ?",
-            user_id
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM users WHERE referrer_id = $1"
         )
+        .bind(user_id)
         .fetch_one(&self.pool)
-        .await?
-        .count;
+        .await?;
 
         // 获取推荐用户列表
-        let referrals = sqlx::query_as!(
-            User,
+        let referrals = sqlx::query_as::<_, User>(
             r#"
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: MemberType",
+                member_type as "member_type: _",
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
-            WHERE referrer_id = ?
+            WHERE referrer_id = $1
             ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT $2 OFFSET $3
             "#,
-            user_id,
-            limit,
-            offset
         )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -177,11 +173,11 @@ impl UserService {
         let order_stats = sqlx::query!(
             r#"
             SELECT 
-                COUNT(*) as total_orders,
-                COALESCE(SUM(price), 0) as total_spent,
-                COALESCE(SUM(stamps_earned), 0) as total_earned_stamps
+                COUNT(*)::BIGINT as total_orders,
+                COALESCE(SUM(price), 0)::BIGINT as total_spent,
+                COALESCE(SUM(stamps_earned), 0)::BIGINT as total_earned_stamps
             FROM orders 
-            WHERE user_id = ?
+            WHERE user_id = $1
             "#,
             user_id
         )
@@ -191,9 +187,9 @@ impl UserService {
         // 获取可用优惠码数量
         let available_codes = sqlx::query!(
             r#"
-            SELECT COUNT(*) as count 
+            SELECT COUNT(*)::BIGINT as count 
             FROM discount_codes 
-            WHERE user_id = ? AND is_used = FALSE AND expires_at > datetime('now')
+            WHERE user_id = $1 AND is_used = FALSE AND expires_at > NOW()
             "#,
             user_id
         )
@@ -201,10 +197,10 @@ impl UserService {
         .await?;
 
         Ok(UserStatistics {
-            total_orders: order_stats.total_orders,
-            total_spent: order_stats.total_spent,
-            total_earned_stamps: order_stats.total_earned_stamps,
-            available_discount_codes: available_codes.count,
+            total_orders: order_stats.total_orders.unwrap_or(0),
+            total_spent: order_stats.total_spent.unwrap_or(0),
+            total_earned_stamps: order_stats.total_earned_stamps.unwrap_or(0),
+            available_discount_codes: available_codes.count.unwrap_or(0),
         })
     }
 }

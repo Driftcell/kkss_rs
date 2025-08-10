@@ -1,85 +1,76 @@
--- 创建用户表
+-- 创建用户表 (Postgres)
 CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     member_code TEXT UNIQUE NOT NULL,
     phone TEXT UNIQUE NOT NULL,
     username TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     birthday DATE NOT NULL,
     member_type TEXT NOT NULL CHECK (member_type IN ('fan', 'sweet_shareholder', 'super_shareholder')),
-    balance INTEGER DEFAULT 0,
-    -- 将 sweet_cash 更名为 stamps 以与模型一致
-    stamps INTEGER DEFAULT 0,
-    referrer_id INTEGER NULL,
+    balance BIGINT DEFAULT 0,
+    stamps BIGINT DEFAULT 0,
+    referrer_id BIGINT NULL REFERENCES users(id),
     referral_code TEXT UNIQUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (referrer_id) REFERENCES users(id)
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 创建订单表
 CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL,
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id),
     member_code TEXT,
-    price INTEGER NOT NULL,
+    price BIGINT NOT NULL,
     product_name TEXT NOT NULL,
     product_no TEXT,
     order_status INTEGER NOT NULL,
     pay_type INTEGER,
-    -- 将 sweet_cash_earned 更名为 stamps_earned 以与模型一致
-    stamps_earned INTEGER DEFAULT 0,
-    external_created_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    stamps_earned BIGINT DEFAULT 0,
+    external_created_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 创建优惠码表
 CREATE TABLE IF NOT EXISTS discount_codes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id),
     code TEXT UNIQUE NOT NULL,
-    discount_amount INTEGER NOT NULL,
+    discount_amount BIGINT NOT NULL,
     code_type TEXT NOT NULL CHECK (code_type IN ('welcome', 'referral', 'purchase_reward', 'redeemed')),
     is_used BOOLEAN DEFAULT FALSE,
-    used_at DATETIME NULL,
-    expires_at DATETIME NOT NULL,
-    external_id INTEGER NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    used_at TIMESTAMPTZ NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    external_id BIGINT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 创建充值记录表
 CREATE TABLE IF NOT EXISTS recharge_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id),
     stripe_payment_intent_id TEXT UNIQUE NOT NULL,
-    amount INTEGER NOT NULL,
-    bonus_amount INTEGER NOT NULL,
-    total_amount INTEGER NOT NULL,
+    amount BIGINT NOT NULL,
+    bonus_amount BIGINT NOT NULL,
+    total_amount BIGINT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'succeeded', 'failed', 'canceled')),
     stripe_status TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 创建甜品现金交易记录表
 CREATE TABLE IF NOT EXISTS sweet_cash_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id),
     transaction_type TEXT NOT NULL CHECK (transaction_type IN ('earn', 'redeem')),
-    amount INTEGER NOT NULL,
-    balance_after INTEGER NOT NULL,
-    related_order_id INTEGER NULL,
-    related_discount_code_id INTEGER NULL,
+    amount BIGINT NOT NULL,
+    balance_after BIGINT NOT NULL,
+    related_order_id BIGINT NULL REFERENCES orders(id),
+    related_discount_code_id BIGINT NULL REFERENCES discount_codes(id),
     description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (related_order_id) REFERENCES orders(id),
-    FOREIGN KEY (related_discount_code_id) REFERENCES discount_codes(id)
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 创建索引
