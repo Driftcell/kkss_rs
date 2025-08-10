@@ -105,7 +105,7 @@ impl RechargeService {
             r#"
             SELECT
                 id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: _",
+                total_amount, status,
                 stripe_status, created_at, updated_at
             FROM recharge_records
             WHERE stripe_payment_intent_id = $1 AND user_id = $2
@@ -185,7 +185,7 @@ impl RechargeService {
             r#"
             SELECT
                 id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: _",
+                total_amount, status,
                 stripe_status, created_at, updated_at
             FROM recharge_records
             WHERE user_id = $1
@@ -235,7 +235,7 @@ impl RechargeService {
             r#"
             SELECT
                 id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: _",
+                total_amount, status,
                 stripe_status, created_at, updated_at
             FROM recharge_records
             WHERE stripe_payment_intent_id = $1 AND user_id = $2

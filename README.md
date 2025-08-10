@@ -38,10 +38,10 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 git clone <repository-url>
 cd kkss-backend
 
-# 复制配置文件
+# (可选) 复制配置文件
 cp config.toml.example config.toml
 
-# 编辑配置文件，填入实际的API密钥
+# 编辑配置文件，填入实际的API密钥；或者直接通过环境变量配置，省略 config.toml
 vim config.toml
 ```
 
@@ -145,7 +145,14 @@ cargo watch -x run
 
 ## 配置说明
 
-配置文件使用TOML格式，支持环境变量覆盖：
+可以通过两种方式提供配置：
+
+1. 使用 `config.toml`（参考 `config.toml.example`），然后可用环境变量覆盖其中的值。
+2. 完全不提供 `config.toml`，所有值通过环境变量注入（此时必须至少提供 `DATABASE_URL`）。
+
+当 `CONFIG_PATH`（默认 `config.toml`）指向的文件不存在时，程序会使用一套缺省值 + 环境变量构建配置。
+
+配置文件格式（可选）：
 
 ```toml
 [server]
@@ -178,16 +185,42 @@ base_url = "https://sz.sunzee.com.cn"
 
 ### 环境变量
 
-可以通过环境变量覆盖配置：
+支持的环境变量（全部大写），文件存在时用于覆盖；文件不存在时用于构建：
 
-- `DATABASE_URL` - 数据库连接字符串
-- `JWT_SECRET` - JWT密钥
-- `TWILIO_ACCOUNT_SID` - Twilio账户SID
-- `TWILIO_AUTH_TOKEN` - Twilio认证令牌
-- `STRIPE_SECRET_KEY` - Stripe密钥
-- `STRIPE_WEBHOOK_SECRET` - Stripe Webhook密钥
-- `SEVENCLOUD_USERNAME` - 七云用户名
-- `SEVENCLOUD_PASSWORD` - 七云密码
+- 基础：
+  - `CONFIG_PATH` 指定配置文件路径（可选）
+- 服务：
+  - `SERVER_HOST` (默认 `0.0.0.0`)
+  - `SERVER_PORT` (默认 `8080`)
+- 数据库：
+  - `DATABASE_URL` (无文件模式下必填)
+  - `DB_MAX_CONNECTIONS` (默认 `10`)
+- JWT：
+  - `JWT_SECRET` (默认 `change-me-in-production`)
+  - `JWT_ACCESS_EXPIRES_IN` (默认 `7200` 秒)
+  - `JWT_REFRESH_EXPIRES_IN` (默认 `2592000` 秒)
+- Twilio：
+  - `TWILIO_ACCOUNT_SID`
+  - `TWILIO_AUTH_TOKEN`
+  - `TWILIO_FROM_PHONE`
+- Stripe：
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_WEBHOOK_SECRET`
+- 七云：
+  - `SEVENCLOUD_USERNAME`
+  - `SEVENCLOUD_PASSWORD`
+  - `SEVENCLOUD_BASE_URL` (默认 `https://sz.sunzee.com.cn`)
+
+示例（纯环境变量运行）：
+
+```bash
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/kkss"
+export JWT_SECRET="super-secret"
+export STRIPE_SECRET_KEY="sk_test_xxx"
+export STRIPE_WEBHOOK_SECRET="whsec_xxx"
+export SERVER_PORT=8080
+cargo run
+```
 
 ## 数据库设计
 
