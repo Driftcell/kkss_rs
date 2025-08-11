@@ -77,10 +77,44 @@ pub async fn redeem_discount_code(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/discount-codes/redeem-balance",
+    tag = "discount",
+    request_body = RedeemBalanceDiscountCodeRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "使用余额兑换优惠码成功", body = RedeemBalanceDiscountCodeResponse),
+        (status = 401, description = "未授权"),
+        (status = 400, description = "请求参数错误")
+    )
+)]
+pub async fn redeem_balance_discount_code(
+    discount_service: web::Data<DiscountCodeService>,
+    req: HttpRequest,
+    request: web::Json<RedeemBalanceDiscountCodeRequest>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+
+    match discount_service
+        .redeem_balance_discount_code(user_id, request.into_inner())
+        .await
+    {
+        Ok(response) => Ok(HttpResponse::Ok().json(json!({
+            "success": true,
+            "data": response
+        }))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
 pub fn discount_code_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/discount-codes")
             .route("", web::get().to(get_discount_codes))
-            .route("/redeem", web::post().to(redeem_discount_code)),
+            .route("/redeem", web::post().to(redeem_discount_code))
+            .route("/redeem-balance", web::post().to(redeem_balance_discount_code)),
     );
 }

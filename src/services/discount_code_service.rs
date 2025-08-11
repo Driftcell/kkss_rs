@@ -166,4 +166,101 @@ impl DiscountCodeService {
             remaining_stamps: current_stamps - stamps_needed,
         })
     }
+
+    pub async fn redeem_balance_discount_code(
+        &self,
+        user_id: i64,
+        request: RedeemBalanceDiscountCodeRequest,
+    ) -> AppResult<RedeemBalanceDiscountCodeResponse> {
+        // 校验金额: 为正且是100的倍数 (>= $1)
+        if request.discount_amount <= 0 || request.discount_amount % 100 != 0 {
+            return Err(AppError::ValidationError(
+                "discount_amount must be positive and in cents (multiple of 100)".to_string(),
+            ));
+        }
+        // 有效期 1-3 月
+        if request.expire_months < 1 || request.expire_months > 3 {
+            return Err(AppError::ValidationError(
+                "The expiration period must be between 1 and 3 months".to_string(),
+            ));
+        }
+
+        let mut tx = self.pool.begin().await?;
+
+        // 查询余额
+        let user = sqlx::query!("SELECT balance FROM users WHERE id = $1", user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+        let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+        let current_balance = user.balance.unwrap_or(0);
+        if current_balance < request.discount_amount {
+            return Err(AppError::ValidationError("Insufficient balance".to_string()));
+        }
+
+        // 扣减余额
+        sqlx::query("UPDATE users SET balance = balance - $1 WHERE id = $2")
+            .bind(request.discount_amount)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // 生成优惠码
+        let code = generate_six_digit_code();
+        let expires_at = Utc::now() + Duration::days(30 * request.expire_months as i64);
+        let discount_dollars = request.discount_amount as f64 / 100.0;
+        {
+            let api = self.sevencloud_api.lock().await;
+            api.generate_discount_code(&code, discount_dollars, request.expire_months)
+                .await?;
+        }
+
+        let code_type_enum = CodeType::Redeemed; // 与 stamps 兑换一致，标记为 redeemed
+        let discount_code_id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT INTO discount_codes (
+                user_id, code, discount_amount, code_type, expires_at
+            ) VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+            "#,
+        )
+        .bind(user_id)
+        .bind(&code)
+        .bind(request.discount_amount)
+        .bind(code_type_enum)
+        .bind(expires_at)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // 记录 sweet_cash_transactions (Redeem)
+        sqlx::query(
+            r#"INSERT INTO sweet_cash_transactions (
+                user_id, transaction_type, amount, balance_after, related_discount_code_id, description
+            ) VALUES ($1, 'redeem', $2, $3, $4, $5)"#,
+        )
+        .bind(user_id)
+        .bind(request.discount_amount)
+        .bind(current_balance - request.discount_amount)
+        .bind(discount_code_id)
+        .bind(format!("Redeem balance for discount code {}", code))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        let discount_code = DiscountCodeResponse {
+            id: discount_code_id,
+            code,
+            discount_amount: request.discount_amount,
+            code_type: CodeType::Redeemed,
+            is_used: false,
+            expires_at,
+            created_at: Utc::now(),
+        };
+
+        Ok(RedeemBalanceDiscountCodeResponse {
+            discount_code,
+            balance_used: request.discount_amount,
+            remaining_balance: current_balance - request.discount_amount,
+        })
+    }
 }

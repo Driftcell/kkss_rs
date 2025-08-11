@@ -70,6 +70,19 @@ pub struct RedeemDiscountCodeResponse {
     pub remaining_stamps: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RedeemBalanceDiscountCodeRequest {
+    pub discount_amount: i64, // 要兑换的优惠码金额(美分)，与 balance 1:1 扣减
+    pub expire_months: u32,   // 有效期(月)，1-3
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RedeemBalanceDiscountCodeResponse {
+    pub discount_code: DiscountCodeResponse,
+    pub balance_used: i64,
+    pub remaining_balance: i64,
+}
+
 impl From<DiscountCode> for DiscountCodeResponse {
     fn from(code: DiscountCode) -> Self {
         Self {
