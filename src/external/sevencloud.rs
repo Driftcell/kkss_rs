@@ -96,7 +96,7 @@ impl SevenCloudAPI {
 
         if !result.success {
             return Err(AppError::ExternalApiError(format!(
-                "Can't login: {}",
+                "Failed to login the sevencloud: {}",
                 result.message
             )));
         }
