@@ -41,7 +41,7 @@ impl TwilioService {
             self.config.account_sid
         );
 
-        let body = format!("您的验证码是: {}，有效期5分钟。", code);
+        let body = format!("Your verification code is: {}，valid for 5 minutes.", code);
 
         let params = [
             ("To", phone),
@@ -58,16 +58,16 @@ impl TwilioService {
             .await?;
 
         if response.status().is_success() {
-            log::info!("验证码短信发送成功: {}", phone);
+            log::info!("Verification code SMS sent successfully: {}", phone);
             Ok(())
         } else {
             let error_text = response
                 .text()
                 .await
-                .unwrap_or_else(|_| "未知错误".to_string());
-            log::error!("验证码短信发送失败: {}, 错误: {}", phone, error_text);
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            log::error!("Verification code SMS failed to send: {}, Error: {}", phone, error_text);
             Err(AppError::ExternalApiError(format!(
-                "短信发送失败: {}",
+                "SMS sending failed: {}",
                 error_text
             )))
         }
