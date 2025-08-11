@@ -21,15 +21,15 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     // 加载配置
-    let config = Config::from_toml().expect("无法加载配置文件");
+    let config = Config::from_toml().expect("Failed to load configuration file");
 
     // 创建数据库连接池
     let pool = create_pool(&config.database)
         .await
-        .expect("无法创建数据库连接池");
+        .expect("Failed to create database connection pool");
 
     // 运行数据库迁移
-    run_migrations(&pool).await.expect("无法运行数据库迁移");
+    run_migrations(&pool).await.expect("Failed to run database migrations");
 
     // 创建JWT服务
     let jwt_service = JwtService::new(
