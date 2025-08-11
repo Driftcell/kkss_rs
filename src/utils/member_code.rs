@@ -11,7 +11,10 @@ pub async fn generate_unique_member_code(pool: &PgPool) -> AppResult<String> {
         let member_code = rng.gen_range(1000000001_u64..=9999999999_u64).to_string();
 
         // 检查是否已存在
-    let exists = sqlx::query!("SELECT COUNT(*) as count FROM users WHERE member_code = $1", member_code)
+        let exists = sqlx::query!(
+            "SELECT COUNT(*) as count FROM users WHERE member_code = $1",
+            member_code
+        )
         .fetch_one(pool)
         .await?;
 
@@ -30,7 +33,10 @@ pub async fn generate_unique_referral_code(pool: &PgPool) -> AppResult<String> {
         let referral_code = rng.gen_range(100000_u32..=999999_u32).to_string();
 
         // 检查是否已存在
-    let exists = sqlx::query!("SELECT COUNT(*) as count FROM users WHERE referral_code = $1", referral_code)
+        let exists = sqlx::query!(
+            "SELECT COUNT(*) as count FROM users WHERE referral_code = $1",
+            referral_code
+        )
         .fetch_one(pool)
         .await?;
 
@@ -54,7 +60,10 @@ pub async fn generate_unique_discount_code(pool: &PgPool) -> AppResult<String> {
             .collect();
 
         // 检查是否已存在
-    let exists = sqlx::query!("SELECT COUNT(*) as count FROM discount_codes WHERE code = $1", code)
+        let exists = sqlx::query!(
+            "SELECT COUNT(*) as count FROM discount_codes WHERE code = $1",
+            code
+        )
         .fetch_one(pool)
         .await?;
 
@@ -64,4 +73,4 @@ pub async fn generate_unique_discount_code(pool: &PgPool) -> AppResult<String> {
     }
 }
 
-// TODO: 添加 Postgres 集成测试 (testcontainers 或 docker) 
+// TODO: 添加 Postgres 集成测试 (testcontainers 或 docker)

@@ -48,8 +48,8 @@ impl<T> ApiResponse<T> {
 }
 
 // 为 Swagger 文档定义具体的响应类型
-use crate::models::user::{UserResponse, AuthResponse, SendCodeResponse};
 use crate::models::order::OrderResponse;
+use crate::models::user::{AuthResponse, SendCodeResponse, UserResponse};
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AuthApiResponse {

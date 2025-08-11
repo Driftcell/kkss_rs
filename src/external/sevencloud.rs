@@ -101,21 +101,24 @@ impl SevenCloudAPI {
             )));
         }
 
-        let data = result
-            .data
-            .ok_or_else(|| AppError::ExternalApiError("Sevencloud response is empty".to_string()))?;
+        let data = result.data.ok_or_else(|| {
+            AppError::ExternalApiError("Sevencloud response is empty".to_string())
+        })?;
 
         self.admin_id = data["id"].as_i64();
         self.username = data["name"].as_str().map(|s| s.to_string());
         self.token = data["currentToken"].as_str().map(|s| s.to_string());
 
-        log::info!("Sevencloud API login successful, admin_id: {:?}", self.admin_id.unwrap());
+        log::info!(
+            "Sevencloud API login successful, admin_id: {:?}",
+            self.admin_id.unwrap()
+        );
 
         Ok(())
     }
 
     pub async fn get_orders(
-        &self,
+        &mut self,
         start_date: &str,
         end_date: &str,
     ) -> AppResult<Vec<OrderRecord>> {
@@ -145,26 +148,40 @@ impl SevenCloudAPI {
             params.insert("ifForeign", "".to_string());
             params.insert("chartType", "day".to_string());
 
-            let response = self
-                .client
-                .get(&url)
-                .query(&params)
-                .header("Authorization", self.token.as_ref().unwrap())
-                .send()
-                .await?;
+            // 最多尝试 2 次 (第一次失败且判定为 token 失效时自动重登重试)
+            let mut attempt = 0;
+            let page_data = loop {
+                attempt += 1;
+                let response = self
+                    .client
+                    .get(&url)
+                    .query(&params)
+                    .header("Authorization", self.token.as_ref().unwrap())
+                    .send()
+                    .await?;
 
-            let result: ApiResponse<OrdersData> = response.json().await?;
+                let result: ApiResponse<OrdersData> = response.json().await?;
 
-            if !result.success {
-                return Err(AppError::ExternalApiError(format!(
-                    "Failed to retrieve orders: {}",
-                    result.message
-                )));
-            }
+                if !result.success {
+                    if attempt == 1 && Self::should_retry_login(&result.message) {
+                        log::warn!(
+                            "Sevencloud token maybe expired when fetching orders, relogin and retry...: {}",
+                            result.message
+                        );
+                        self.login().await?; // 重新登录并重试
+                        continue;
+                    }
+                    return Err(AppError::ExternalApiError(format!(
+                        "Failed to retrieve orders: {}",
+                        result.message
+                    )));
+                }
 
-            let page_data = result
-                .data
-                .ok_or_else(|| AppError::ExternalApiError("Orders data is empty".to_string()))?;
+                let data = result.data.ok_or_else(|| {
+                    AppError::ExternalApiError("Orders data is empty".to_string())
+                })?;
+                break data;
+            };
 
             all_orders.extend(page_data.records);
 
@@ -178,7 +195,10 @@ impl SevenCloudAPI {
         Ok(all_orders)
     }
 
-    pub async fn get_discount_codes(&self, is_use: Option<bool>) -> AppResult<Vec<CouponRecord>> {
+    pub async fn get_discount_codes(
+        &mut self,
+        is_use: Option<bool>,
+    ) -> AppResult<Vec<CouponRecord>> {
         self.ensure_logged_in()?;
 
         let url = format!("{}/SZWL-SERVER/tPromoCode/list", self.config.base_url);
@@ -197,33 +217,42 @@ impl SevenCloudAPI {
                     serde_json::Value::String(if is_use { "1" } else { "0" }.to_string());
             }
 
-            let response = self
-                .client
-                .post(&url)
-                .json(&data)
-                .header("Authorization", self.token.as_ref().unwrap())
-                .send()
-                .await?;
+            let mut attempt = 0;
+            let page_data = loop {
+                attempt += 1;
+                let response = self
+                    .client
+                    .post(&url)
+                    .json(&data)
+                    .header("Authorization", self.token.as_ref().unwrap())
+                    .send()
+                    .await?;
 
-            let result: ApiResponse<CouponsData> = response.json().await?;
-
-            if !result.success {
-                return Err(AppError::ExternalApiError(format!(
-                    "Failed to retrieve discount codes: {}",
-                    result.message
-                )));
-            }
-
-            let page_data = result
-                .data
-                .ok_or_else(|| AppError::ExternalApiError("Discount codes data is empty".to_string()))?;
+                let result: ApiResponse<CouponsData> = response.json().await?;
+                if !result.success {
+                    if attempt == 1 && Self::should_retry_login(&result.message) {
+                        log::warn!(
+                            "Sevencloud token maybe expired when fetching discount codes, relogin and retry...: {}",
+                            result.message
+                        );
+                        self.login().await?;
+                        continue;
+                    }
+                    return Err(AppError::ExternalApiError(format!(
+                        "Failed to retrieve discount codes: {}",
+                        result.message
+                    )));
+                }
+                let data = result.data.ok_or_else(|| {
+                    AppError::ExternalApiError("Discount codes data is empty".to_string())
+                })?;
+                break data;
+            };
 
             all_coupons.extend(page_data.records);
-
             if current_page >= page_data.pages {
                 break;
             }
-
             current_page += 1;
         }
 
@@ -231,7 +260,7 @@ impl SevenCloudAPI {
     }
 
     pub async fn generate_discount_code(
-        &self,
+        &mut self,
         code: &str,
         discount: f64,
         expire_months: u32,
@@ -239,11 +268,15 @@ impl SevenCloudAPI {
         self.ensure_logged_in()?;
 
         if code.len() != 6 || !code.chars().all(|c| c.is_digit(10)) {
-            return Err(AppError::ValidationError("Invalid discount code format".to_string()));
+            return Err(AppError::ValidationError(
+                "Invalid discount code format".to_string(),
+            ));
         }
 
         if discount <= 0.0 {
-            return Err(AppError::ValidationError("Discount amount must be greater than 0".to_string()));
+            return Err(AppError::ValidationError(
+                "Discount amount must be greater than 0".to_string(),
+            ));
         }
 
         if expire_months == 0 || expire_months > 3 {
@@ -264,22 +297,33 @@ impl SevenCloudAPI {
         params.insert("frpCode", "WEIXIN_NATIVE".to_string());
         params.insert("adminId", self.admin_id.unwrap().to_string());
 
-        let response = self
-            .client
-            .get(&url)
-            .query(&params)
-            .header("Authorization", self.token.as_ref().unwrap())
-            .send()
-            .await?;
-
-        let result: ApiResponse<String> = response.json().await?;
-
-        if !result.success {
-            return Err(AppError::ExternalApiError(format!(
-                "Failed to generate discount code: {}",
-                result.message
-            )));
-        }
+        let mut attempt = 0;
+    let _result = loop {
+            attempt += 1;
+            let response = self
+                .client
+                .get(&url)
+                .query(&params)
+                .header("Authorization", self.token.as_ref().unwrap())
+                .send()
+                .await?;
+            let result: ApiResponse<String> = response.json().await?;
+            if !result.success {
+                if attempt == 1 && Self::should_retry_login(&result.message) {
+                    log::warn!(
+                        "Sevencloud token maybe expired when generating discount code, relogin and retry...: {}",
+                        result.message
+                    );
+                    self.login().await?;
+                    continue;
+                }
+                return Err(AppError::ExternalApiError(format!(
+                    "Failed to generate discount code: {}",
+                    result.message
+                )));
+            }
+            break result;
+        };
 
         log::info!(
             "Successfully generated discount code: {}, Amount: {}, Expiration: {} months",
@@ -293,8 +337,27 @@ impl SevenCloudAPI {
 
     fn ensure_logged_in(&self) -> AppResult<()> {
         if self.token.is_none() || self.admin_id.is_none() {
-            return Err(AppError::ExternalApiError("Not logged in to Sevencloud API".to_string()));
+            return Err(AppError::ExternalApiError(
+                "Not logged in to Sevencloud API".to_string(),
+            ));
         }
         Ok(())
+    }
+
+    fn should_retry_login(message: &str) -> bool {
+        let m = message.to_lowercase();
+        // 常见 token 失效/未登录/不可用/需要重新登录相关关键词
+        if m.contains("token") {
+            return true;
+        }
+        // 英文场景
+        if m.contains("login") || m.contains("relogin") || m.contains("expired") || m.contains("unauthorized") {
+            return true;
+        }
+        // 中文场景
+        if m.contains("过期") || m.contains("未登录") || m.contains("重新登录") || m.contains("不可用") {
+            return true;
+        }
+        false
     }
 }

@@ -30,7 +30,8 @@ pub fn hash_password(password: &str) -> AppResult<String> {
 
 /// 验证密码
 pub fn verify_password(password: &str, hash: &str) -> AppResult<bool> {
-    verify(password, hash).map_err(|e| AppError::InternalError(format!("Failed to verify password: {}", e)))
+    verify(password, hash)
+        .map_err(|e| AppError::InternalError(format!("Failed to verify password: {}", e)))
 }
 
 #[cfg(test)]

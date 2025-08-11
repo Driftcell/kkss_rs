@@ -20,7 +20,7 @@ impl SyncService {
     }
 
     pub async fn sync_orders(&self, start_date: &str, end_date: &str) -> AppResult<usize> {
-        let api = self.sevencloud_api.lock().await;
+        let mut api = self.sevencloud_api.lock().await;
         let orders = api.get_orders(start_date, end_date).await?;
 
         let mut processed_count = 0;
@@ -33,13 +33,16 @@ impl SyncService {
             processed_count += 1;
         }
 
-        log::info!("Synchronization complete, processed orders: {}", processed_count);
+        log::info!(
+            "Synchronization complete, processed orders: {}",
+            processed_count
+        );
         Ok(processed_count)
     }
 
     async fn process_order(&self, order_record: OrderRecord) -> AppResult<()> {
         // 检查订单是否已存在
-    let existing = sqlx::query!("SELECT id FROM orders WHERE id = $1", order_record.id)
+        let existing = sqlx::query!("SELECT id FROM orders WHERE id = $1", order_record.id)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -88,7 +91,10 @@ impl SyncService {
             .await?;
 
             // 新订单 +1 个 stamp
-            sqlx::query!("UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = $1", user.id)
+            sqlx::query!(
+                "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = $1",
+                user.id
+            )
             .execute(&mut *tx)
             .await?;
 
@@ -101,14 +107,17 @@ impl SyncService {
                 1
             );
         } else {
-            log::debug!("Order has no associated user, skipping: {}", order_record.id);
+            log::debug!(
+                "Order has no associated user, skipping: {}",
+                order_record.id
+            );
         }
 
         Ok(())
     }
 
     pub async fn sync_discount_codes(&self) -> AppResult<usize> {
-        let api = self.sevencloud_api.lock().await;
+        let mut api = self.sevencloud_api.lock().await;
         let coupons = api.get_discount_codes(None).await?;
 
         let mut processed_count = 0;
@@ -121,7 +130,10 @@ impl SyncService {
             processed_count += 1;
         }
 
-        log::info!("Synchronization complete, processed discount codes: {}", processed_count);
+        log::info!(
+            "Synchronization complete, processed discount codes: {}",
+            processed_count
+        );
         Ok(processed_count)
     }
 

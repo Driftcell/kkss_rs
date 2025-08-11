@@ -34,18 +34,17 @@ impl UserService {
         let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         // 获取推荐人数
-        let total_referrals: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE referrer_id = $1"
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total_referrals: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE referrer_id = $1")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
 
         // 获取用户统计信息
         let statistics = self.get_user_statistics(user_id).await?;
 
         let mut user_response = UserResponse::from(user);
-    user_response.total_referrals = total_referrals;
+        user_response.total_referrals = total_referrals;
 
         Ok((user_response, statistics))
     }
@@ -66,8 +65,9 @@ impl UserService {
 
         let birthday = if let Some(birthday_str) = &request.birthday {
             Some(
-                chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d")
-                    .map_err(|_| AppError::ValidationError("Invalid birthday format".to_string()))?,
+                chrono::NaiveDate::parse_from_str(birthday_str, "%Y-%m-%d").map_err(|_| {
+                    AppError::ValidationError("Invalid birthday format".to_string())
+                })?,
             )
         } else {
             None
@@ -131,12 +131,10 @@ impl UserService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-        let total: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE referrer_id = $1"
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE referrer_id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
 
         // 获取推荐用户列表
         let referrals = sqlx::query_as::<_, User>(

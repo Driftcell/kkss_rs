@@ -29,7 +29,9 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to create database connection pool");
 
     // 运行数据库迁移
-    run_migrations(&pool).await.expect("Failed to run database migrations");
+    run_migrations(&pool)
+        .await
+        .expect("Failed to run database migrations");
 
     // 创建JWT服务
     let jwt_service = JwtService::new(
@@ -61,6 +63,37 @@ async fn main() -> std::io::Result<()> {
     let discount_code_service = DiscountCodeService::new(pool.clone(), sevencloud_api.clone());
     let recharge_service = RechargeService::new(pool.clone(), stripe_service.clone());
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
+
+    // 启动后台定时同步任务 (每分钟同步最近一周订单与优惠码)
+    {
+        let sync_service_clone = sync_service.clone();
+        tokio::spawn(async move {
+            use chrono::Duration;
+            use chrono::Utc;
+            loop {
+                let now = Utc::now();
+                let start = now - Duration::days(7);
+                let start_date = start.format("%Y-%m-%d %H:%M:%S").to_string();
+                let end_date = now.format("%Y-%m-%d %H:%M:%S").to_string();
+
+                log::info!(
+                    "Start syncing orders and discount codes: {} ~ {}",
+                    start_date,
+                    end_date
+                );
+                // 同步订单
+                if let Err(e) = sync_service_clone.sync_orders(&start_date, &end_date).await {
+                    log::error!("Failed to sync orders: {:?}", e);
+                }
+                // 同步优惠码
+                if let Err(e) = sync_service_clone.sync_discount_codes().await {
+                    log::error!("Failed to sync discount codes: {:?}", e);
+                }
+                // 间隔 60 秒
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            }
+        });
+    }
 
     // 启动HTTP服务器
     log::info!(

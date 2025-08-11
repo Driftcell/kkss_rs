@@ -43,10 +43,10 @@ impl OrderService {
         let _where_clause = where_conditions.join(" AND ");
 
         // 获取总数 - 简化查询
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM orders WHERE user_id = $1")
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM orders WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
 
         // 获取订单列表 - 简化查询
         let orders = sqlx::query_as::<_, Order>(

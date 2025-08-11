@@ -1,9 +1,9 @@
-use actix_web::{web, HttpRequest, HttpResponse, Result};
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
 use crate::services::recharge_service::RechargeService;
+use actix_web::{HttpRequest, HttpResponse, Result, web};
+use log::{error, info, warn};
 use stripe::{Event, EventObject, EventType, PaymentIntent};
-use log::{info, warn, error};
 
 /// Stripe webhook处理器
 ///
@@ -40,7 +40,10 @@ pub async fn stripe_webhook(
         }
     };
 
-    info!("Received Stripe webhook event: {} ({})", event.type_, event.id);
+    info!(
+        "Received Stripe webhook event: {} ({})",
+        event.type_, event.id
+    );
 
     // 处理不同类型的事件
     match handle_stripe_event(event, &recharge_service).await {
@@ -62,10 +65,7 @@ pub async fn stripe_webhook(
 }
 
 /// 处理具体的Stripe事件
-async fn handle_stripe_event(
-    event: Event,
-    recharge_service: &RechargeService,
-) -> AppResult<()> {
+async fn handle_stripe_event(event: Event, recharge_service: &RechargeService) -> AppResult<()> {
     match event.type_ {
         EventType::PaymentIntentSucceeded => {
             handle_payment_intent_succeeded(event, recharge_service).await
@@ -89,7 +89,7 @@ async fn handle_payment_intent_succeeded(
     recharge_service: &RechargeService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
-    
+
     info!("Payment succeeded for PaymentIntent: {}", payment_intent.id);
 
     // 获取用户ID从metadata
@@ -97,13 +97,15 @@ async fn handle_payment_intent_succeeded(
         .metadata
         .get("user_id")
         .and_then(|v| v.parse::<i64>().ok())
-        .ok_or_else(|| AppError::ValidationError("Missing or invalid user_id in metadata".to_string()))?;
+        .ok_or_else(|| {
+            AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
+        })?;
 
     // 调用recharge_service处理支付成功
     recharge_service
         .handle_payment_success_webhook(&payment_intent.id.to_string(), user_id)
         .await?;
-    
+
     Ok(())
 }
 
@@ -113,7 +115,7 @@ async fn handle_payment_intent_failed(
     recharge_service: &RechargeService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
-    
+
     warn!("Payment failed for PaymentIntent: {}", payment_intent.id);
 
     // 获取用户ID从metadata
@@ -121,13 +123,15 @@ async fn handle_payment_intent_failed(
         .metadata
         .get("user_id")
         .and_then(|v| v.parse::<i64>().ok())
-        .ok_or_else(|| AppError::ValidationError("Missing or invalid user_id in metadata".to_string()))?;
+        .ok_or_else(|| {
+            AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
+        })?;
 
     // 调用recharge_service处理支付失败
     recharge_service
         .handle_payment_failure_webhook(&payment_intent.id.to_string(), user_id)
         .await?;
-    
+
     Ok(())
 }
 
@@ -137,21 +141,23 @@ async fn handle_payment_intent_canceled(
     recharge_service: &RechargeService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
-    
+
     info!("Payment canceled for PaymentIntent: {}", payment_intent.id);
 
-    // 获取用户ID从metadata  
+    // 获取用户ID从metadata
     let user_id = payment_intent
         .metadata
         .get("user_id")
         .and_then(|v| v.parse::<i64>().ok())
-        .ok_or_else(|| AppError::ValidationError("Missing or invalid user_id in metadata".to_string()))?;
+        .ok_or_else(|| {
+            AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
+        })?;
 
     // 调用recharge_service处理支付取消
     recharge_service
         .handle_payment_canceled_webhook(&payment_intent.id.to_string(), user_id)
         .await?;
-    
+
     Ok(())
 }
 
@@ -167,17 +173,14 @@ fn extract_payment_intent_from_event(event: Event) -> AppResult<PaymentIntent> {
 
 /// 配置webhook路由
 pub fn webhook_config(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/webhook")
-            .route("/stripe", web::post().to(stripe_webhook))
-    );
+    cfg.service(web::scope("/webhook").route("/stripe", web::post().to(stripe_webhook)));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{test, web, App};
     use crate::config::StripeConfig;
+    use actix_web::{App, test, web};
 
     #[actix_web::test]
     async fn test_webhook_missing_signature() {
@@ -186,15 +189,16 @@ mod tests {
             webhook_secret: "whsec_123".to_string(),
         };
         let stripe_service = StripeService::new(stripe_config);
-        
+
         // 创建一个模拟的RechargeService - 在实际测试中你可能需要mock
         // 这里为了简化，我们只测试签名验证部分
-        
+
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(stripe_service))
-                .configure(webhook_config)
-        ).await;
+                .configure(webhook_config),
+        )
+        .await;
 
         let req = test::TestRequest::post()
             .uri("/webhook/stripe")

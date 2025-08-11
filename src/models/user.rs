@@ -34,8 +34,8 @@ pub struct User {
     pub password_hash: String,
     pub birthday: NaiveDate,
     pub member_type: MemberType,
-    pub balance: Option<i64>,    // 余额(美分)
-    pub stamps: Option<i64>,     // Stamps 数量
+    pub balance: Option<i64>, // 余额(美分)
+    pub stamps: Option<i64>,  // Stamps 数量
     pub referrer_id: Option<i64>,
     pub referral_code: Option<String>,
     pub created_at: Option<DateTime<Utc>>,

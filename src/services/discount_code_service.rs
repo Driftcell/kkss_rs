@@ -32,10 +32,11 @@ impl DiscountCodeService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM discount_codes WHERE user_id = $1")
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM discount_codes WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
 
         // 获取优惠码列表
         let discount_codes = sqlx::query_as::<_, DiscountCode>(
@@ -99,7 +100,7 @@ impl DiscountCodeService {
         let mut tx = self.pool.begin().await?;
 
         // 检查用户 stamps 余额
-    let user = sqlx::query!("SELECT stamps FROM users WHERE id = $1", user_id)
+        let user = sqlx::query!("SELECT stamps FROM users WHERE id = $1", user_id)
             .fetch_optional(&mut *tx)
             .await?;
 
@@ -111,11 +112,11 @@ impl DiscountCodeService {
         }
 
         // 扣除 stamps
-    sqlx::query("UPDATE users SET stamps = stamps - $1 WHERE id = $2")
-        .bind(stamps_needed)
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE users SET stamps = stamps - $1 WHERE id = $2")
+            .bind(stamps_needed)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
 
         // 生成优惠码
         let code = generate_six_digit_code(); // 生成6位数字码
@@ -124,13 +125,13 @@ impl DiscountCodeService {
 
         // 调用七云API生成优惠码
         {
-            let api = self.sevencloud_api.lock().await;
+            let mut api = self.sevencloud_api.lock().await;
             api.generate_discount_code(&code, discount_dollars, request.expire_months)
                 .await?;
         }
 
         // 保存优惠码到本地数据库
-    let code_type_enum = CodeType::Redeemed;
+        let code_type_enum = CodeType::Redeemed;
         let discount_code_id: i64 = sqlx::query_scalar(
             r#"
             INSERT INTO discount_codes (
@@ -142,7 +143,7 @@ impl DiscountCodeService {
         .bind(user_id)
         .bind(&code)
         .bind(request.discount_amount)
-    .bind(code_type_enum)
+        .bind(code_type_enum)
         .bind(expires_at)
         .fetch_one(&mut *tx)
         .await?;
@@ -194,7 +195,9 @@ impl DiscountCodeService {
         let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
         let current_balance = user.balance.unwrap_or(0);
         if current_balance < request.discount_amount {
-            return Err(AppError::ValidationError("Insufficient balance".to_string()));
+            return Err(AppError::ValidationError(
+                "Insufficient balance".to_string(),
+            ));
         }
 
         // 扣减余额
@@ -209,7 +212,7 @@ impl DiscountCodeService {
         let expires_at = Utc::now() + Duration::days(30 * request.expire_months as i64);
         let discount_dollars = request.discount_amount as f64 / 100.0;
         {
-            let api = self.sevencloud_api.lock().await;
+            let mut api = self.sevencloud_api.lock().await;
             api.generate_discount_code(&code, discount_dollars, request.expire_months)
                 .await?;
         }

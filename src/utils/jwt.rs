@@ -81,7 +81,9 @@ impl JwtService {
         let claims = self.verify_token(token)?;
 
         if claims.token_type != "refresh" {
-            return Err(AppError::AuthError("Invalid refresh token type".to_string()));
+            return Err(AppError::AuthError(
+                "Invalid refresh token type".to_string(),
+            ));
         }
 
         Ok(claims)

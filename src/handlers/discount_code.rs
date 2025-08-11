@@ -115,6 +115,9 @@ pub fn discount_code_config(cfg: &mut web::ServiceConfig) {
         web::scope("/discount-codes")
             .route("", web::get().to(get_discount_codes))
             .route("/redeem", web::post().to(redeem_discount_code))
-            .route("/redeem-balance", web::post().to(redeem_balance_discount_code)),
+            .route(
+                "/redeem-balance",
+                web::post().to(redeem_balance_discount_code),
+            ),
     );
 }

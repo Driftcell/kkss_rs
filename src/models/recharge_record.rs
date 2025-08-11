@@ -87,9 +87,7 @@ impl From<RechargeRecord> for RechargeRecordResponse {
             bonus_amount: record.bonus_amount.unwrap_or(0),
             total_amount: record.total_amount.unwrap_or(0),
             status: record.status,
-            created_at: record
-                .created_at
-                .unwrap_or_else(|| Utc::now()),
+            created_at: record.created_at.unwrap_or_else(|| Utc::now()),
         }
     }
 }

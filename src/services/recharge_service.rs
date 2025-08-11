@@ -53,8 +53,8 @@ impl RechargeService {
             )
             .await?;
 
-    // 保存充值记录 (直接绑定枚举到 ENUM 列)
-    let status = RechargeStatus::Pending;
+        // 保存充值记录 (直接绑定枚举到 ENUM 列)
+        let status = RechargeStatus::Pending;
         let payment_intent_id_str = payment_intent.id.to_string();
         sqlx::query!(
             r#"
@@ -94,7 +94,9 @@ impl RechargeService {
             .await?;
 
         if payment_intent.status != PaymentIntentStatus::Succeeded {
-            return Err(AppError::ValidationError("Payment not successful".to_string()));
+            return Err(AppError::ValidationError(
+                "Payment not successful".to_string(),
+            ));
         }
 
         // 开始事务
@@ -116,15 +118,16 @@ impl RechargeService {
         .fetch_optional(&mut *tx)
         .await?;
 
-        let mut recharge_record =
-            recharge_record.ok_or_else(|| AppError::NotFound("Recharge record not found".to_string()))?;
+        let mut recharge_record = recharge_record
+            .ok_or_else(|| AppError::NotFound("Recharge record not found".to_string()))?;
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
-            let current_balance: i64 = sqlx::query_scalar("SELECT balance FROM users WHERE id = $1")
-                .bind(user_id)
-                .fetch_one(&mut *tx)
-                .await?;
+            let current_balance: i64 =
+                sqlx::query_scalar("SELECT balance FROM users WHERE id = $1")
+                    .bind(user_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
 
             return Ok(ConfirmRechargeResponse {
                 recharge_record: RechargeRecordResponse::from(recharge_record),
@@ -150,10 +153,10 @@ impl RechargeService {
             .await?;
 
         // 获取新余额
-    let current_balance: i64 = sqlx::query_scalar("SELECT balance FROM users WHERE id = $1")
-        .bind(user_id)
-        .fetch_one(&mut *tx)
-        .await?;
+        let current_balance: i64 = sqlx::query_scalar("SELECT balance FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&mut *tx)
+            .await?;
 
         tx.commit().await?;
 
@@ -175,10 +178,11 @@ impl RechargeService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recharge_records WHERE user_id = $1")
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM recharge_records WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
 
         // 获取充值记录列表
         let records = sqlx::query_as::<_, RechargeRecord>(
@@ -249,14 +253,21 @@ impl RechargeService {
         let recharge_record = match recharge_record {
             Some(record) => record,
             None => {
-                log::warn!("Recharge record not found for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+                log::warn!(
+                    "Recharge record not found for payment_intent_id: {} and user_id: {}",
+                    payment_intent_id,
+                    user_id
+                );
                 return Ok(());
             }
         };
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
-            log::info!("Payment already processed for payment_intent_id: {}", payment_intent_id);
+            log::info!(
+                "Payment already processed for payment_intent_id: {}",
+                payment_intent_id
+            );
             return Ok(());
         }
 
@@ -279,8 +290,8 @@ impl RechargeService {
         tx.commit().await?;
 
         log::info!(
-            "Successfully processed payment webhook for user {} with amount {}", 
-            user_id, 
+            "Successfully processed payment webhook for user {} with amount {}",
+            user_id,
             recharge_record.total_amount.unwrap_or(0)
         );
 
@@ -309,9 +320,17 @@ impl RechargeService {
             .await?;
 
         if result.rows_affected() > 0 {
-            log::info!("Marked payment as failed for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+            log::info!(
+                "Marked payment as failed for payment_intent_id: {} and user_id: {}",
+                payment_intent_id,
+                user_id
+            );
         } else {
-            log::warn!("No recharge record found to mark as failed for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+            log::warn!(
+                "No recharge record found to mark as failed for payment_intent_id: {} and user_id: {}",
+                payment_intent_id,
+                user_id
+            );
         }
 
         Ok(())
@@ -339,9 +358,17 @@ impl RechargeService {
             .await?;
 
         if result.rows_affected() > 0 {
-            log::info!("Marked payment as canceled for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+            log::info!(
+                "Marked payment as canceled for payment_intent_id: {} and user_id: {}",
+                payment_intent_id,
+                user_id
+            );
         } else {
-            log::warn!("No recharge record found to mark as canceled for payment_intent_id: {} and user_id: {}", payment_intent_id, user_id);
+            log::warn!(
+                "No recharge record found to mark as canceled for payment_intent_id: {} and user_id: {}",
+                payment_intent_id,
+                user_id
+            );
         }
 
         Ok(())

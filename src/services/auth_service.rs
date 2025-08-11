@@ -46,7 +46,7 @@ impl AuthService {
             let now = Utc::now();
             // created_at在SQLite中返回为NaiveDateTime，需要处理Option
             if let Some(created_at) = last_code.created_at {
-                    if now.signed_duration_since(created_at) < Duration::seconds(60) {
+                if now.signed_duration_since(created_at) < Duration::seconds(60) {
                     return Err(AppError::ValidationError(
                         "The verification code has been sent too frequently, please try again after 60 seconds.".to_string(),
                     ));
@@ -86,12 +86,14 @@ impl AuthService {
             .await?;
 
         // 检查手机号是否已注册
-    let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = $1", request.phone)
+        let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = $1", request.phone)
             .fetch_optional(&self.pool)
             .await?;
 
         if existing_user.is_some() {
-            return Err(AppError::ValidationError("The mobile phone number is registered".to_string()));
+            return Err(AppError::ValidationError(
+                "The mobile phone number is registered".to_string(),
+            ));
         }
 
         // 解析生日
@@ -128,7 +130,9 @@ impl AuthService {
             if let Some(referrer) = referrer {
                 (Some(referrer.id), MemberType::Fan)
             } else {
-                return Err(AppError::ValidationError("The referrer does not exist".to_string()));
+                return Err(AppError::ValidationError(
+                    "The referrer does not exist".to_string(),
+                ));
             }
         } else {
             (None, MemberType::Fan)
@@ -151,7 +155,7 @@ impl AuthService {
             request.username,
             password_hash,
             birthday,
-            member_type as _ ,
+            member_type as _,
             referrer_id,
             referral_code
         )
@@ -211,12 +215,16 @@ impl AuthService {
         .fetch_optional(&self.pool)
         .await?;
 
-        let user = user.ok_or_else(|| AppError::AuthError("User does not exist or password is incorrect".to_string()))?;
+        let user = user.ok_or_else(|| {
+            AppError::AuthError("User does not exist or password is incorrect".to_string())
+        })?;
 
         // 验证密码
         let is_valid = verify_password(&request.password, &user.password_hash)?;
         if !is_valid {
-            return Err(AppError::AuthError("User does not exist or password is incorrect".to_string()));
+            return Err(AppError::AuthError(
+                "User does not exist or password is incorrect".to_string(),
+            ));
         }
 
         // 生成JWT令牌
@@ -274,14 +282,18 @@ impl AuthService {
 
         if let Some(stored_code) = verification_code {
             let now = Utc::now();
-                let expires_at = stored_code.expires_at;
+            let expires_at = stored_code.expires_at;
 
             if now > expires_at {
-                return Err(AppError::ValidationError("The verification code has expired".to_string()));
+                return Err(AppError::ValidationError(
+                    "The verification code has expired".to_string(),
+                ));
             }
 
             if stored_code.code != code {
-                return Err(AppError::ValidationError("The verification code is incorrect".to_string()));
+                return Err(AppError::ValidationError(
+                    "The verification code is incorrect".to_string(),
+                ));
             }
 
             // 验证成功后删除已使用的验证码
@@ -330,11 +342,9 @@ impl AuthService {
 
         // 使用SevenCloud API生成优惠码
         let mut api = self.sevencloud_api.lock().await;
-
-        // 先尝试登录
-        api.login().await?;
-
-        // 生成优惠码，有效期3个月
+        // 尝试登录 (若已登录成功则后续接口正常使用)
+        let _ = api.login().await; // 忽略重复登录错误
+        // 生成优惠码，有效期3个月 (内部有 token 失效自动重试)
         api.generate_discount_code(&code, discount_dollars, 3)
             .await?;
 
@@ -344,7 +354,7 @@ impl AuthService {
     // 清理过期的验证码
     pub async fn cleanup_expired_verification_codes(&self) -> AppResult<()> {
         let now = Utc::now();
-    sqlx::query!("DELETE FROM verification_codes WHERE expires_at < $1", now)
+        sqlx::query!("DELETE FROM verification_codes WHERE expires_at < $1", now)
             .execute(&self.pool)
             .await?;
         Ok(())

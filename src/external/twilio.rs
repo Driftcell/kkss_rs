@@ -65,7 +65,11 @@ impl TwilioService {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            log::error!("Verification code SMS failed to send: {}, Error: {}", phone, error_text);
+            log::error!(
+                "Verification code SMS failed to send: {}, Error: {}",
+                phone,
+                error_text
+            );
             Err(AppError::ExternalApiError(format!(
                 "SMS sending failed: {}",
                 error_text

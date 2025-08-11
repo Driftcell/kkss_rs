@@ -1,11 +1,11 @@
 use crate::config::StripeConfig;
 use crate::error::{AppError, AppResult};
-use stripe::{
-    Client, CreatePaymentIntent, Currency, PaymentIntent, PaymentIntentId, 
-    Event, CreatePaymentIntentAutomaticPaymentMethods,
-};
 use std::collections::HashMap;
 use std::str::FromStr;
+use stripe::{
+    Client, CreatePaymentIntent, CreatePaymentIntentAutomaticPaymentMethods, Currency, Event,
+    PaymentIntent, PaymentIntentId,
+};
 
 /// Stripe服务，用于处理支付意图和webhook验证
 ///
@@ -41,10 +41,7 @@ pub struct StripeService {
 impl StripeService {
     pub fn new(config: StripeConfig) -> Self {
         let client = Client::new(&config.secret_key);
-        Self {
-            client,
-            config,
-        }
+        Self { client, config }
     }
 
     /// 创建用于任意金额充值的支付意图
@@ -96,30 +93,27 @@ impl StripeService {
         metadata.insert("type".to_string(), "recharge".to_string());
 
         // 设置描述
-        let description = description.unwrap_or_else(|| {
-            format!("Recharge ${:.2} to account", amount as f64 / 100.0)
-        });
+        let description = description
+            .unwrap_or_else(|| format!("Recharge ${:.2} to account", amount as f64 / 100.0));
 
         // 创建支付意图请求
         let mut create_payment_intent = CreatePaymentIntent::new(amount, currency);
         create_payment_intent.description = Some(&description);
         create_payment_intent.metadata = Some(metadata);
-        
+
         // 启用自动支付方式
-        create_payment_intent.automatic_payment_methods = Some(
-            CreatePaymentIntentAutomaticPaymentMethods {
+        create_payment_intent.automatic_payment_methods =
+            Some(CreatePaymentIntentAutomaticPaymentMethods {
                 enabled: true,
                 allow_redirects: None,
-            }
-        );
+            });
 
         // 发送请求
         let payment_intent = PaymentIntent::create(&self.client, create_payment_intent)
             .await
-            .map_err(|e| AppError::ExternalApiError(format!(
-                "Failed to create payment intent: {}",
-                e
-            )))?;
+            .map_err(|e| {
+                AppError::ExternalApiError(format!("Failed to create payment intent: {}", e))
+            })?;
 
         Ok(payment_intent)
     }
@@ -142,10 +136,9 @@ impl StripeService {
 
         let payment_intent = PaymentIntent::retrieve(&self.client, &payment_intent_id, &[])
             .await
-            .map_err(|e| AppError::ExternalApiError(format!(
-                "Failed to retrieve payment intent: {}",
-                e
-            )))?;
+            .map_err(|e| {
+                AppError::ExternalApiError(format!("Failed to retrieve payment intent: {}", e))
+            })?;
 
         Ok(payment_intent)
     }
@@ -173,12 +166,11 @@ impl StripeService {
         }
 
         // 使用async-stripe的webhook验证
-        let event = stripe::Webhook::construct_event(
-            payload,
-            signature,
-            &self.config.webhook_secret,
-        )
-        .map_err(|e| AppError::AuthError(format!("Webhook signature verification failed: {}", e)))?;
+        let event =
+            stripe::Webhook::construct_event(payload, signature, &self.config.webhook_secret)
+                .map_err(|e| {
+                    AppError::AuthError(format!("Webhook signature verification failed: {}", e))
+                })?;
 
         Ok(event)
     }

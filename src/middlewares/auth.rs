@@ -1,12 +1,12 @@
 use crate::error::AppError;
 use crate::utils::JwtService;
+use actix_web::http::Method;
 use actix_web::{
     Error, HttpMessage,
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
 };
 use futures_util::future::LocalBoxFuture;
 use std::future::{Ready, ready};
-use actix_web::http::Method;
 
 // 公开路径配置
 struct PublicPaths {
