@@ -137,9 +137,73 @@ impl SyncService {
         Ok(processed_count)
     }
 
-    async fn process_discount_code(&self, _coupon_record: CouponRecord) -> AppResult<()> {
-        // 这里可以实现优惠码同步逻辑
-        // 比如更新本地优惠码的使用状态等
+    async fn process_discount_code(&self, coupon_record: CouponRecord) -> AppResult<()> {
+        // 同步逻辑：依据外部优惠码 code 字段（不使用 external_id），更新本地 is_used/used_at
+        // _coupon_record.is_use: "0" 未使用, "1" 已使用
+        let code_str = coupon_record.code.to_string();
+
+        // 查询本地是否存在该优惠码
+        let local = sqlx::query!(
+            r#"SELECT id, is_used FROM discount_codes WHERE code = $1"#,
+            code_str
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if local.is_none() {
+            log::debug!(
+                "Discount code not found locally, skipping sync: external_code={}",
+                coupon_record.code
+            );
+            return Ok(());
+        }
+        let local = local.unwrap();
+
+        let external_used = match coupon_record.is_use.as_str() {
+            "0" => false,
+            "1" => true,
+            other => {
+                log::warn!(
+                    "Unknown is_use value from external coupon: code={}, value={}",
+                    coupon_record.code, other
+                );
+                false
+            }
+        };
+
+        // 若外部已使用而本地未标记，则更新
+        if external_used && !local.is_used.unwrap_or(false) {
+            // 转换 use_date (七云时间戳假定为毫秒)；若不存在则使用当前时间
+            let used_at = coupon_record
+                .use_date
+                .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
+                .unwrap_or_else(|| chrono::Utc::now());
+
+            sqlx::query!(
+                r#"UPDATE discount_codes SET is_used = TRUE, used_at = $1, updated_at = NOW() WHERE id = $2"#,
+                used_at,
+                local.id
+            )
+            .execute(&self.pool)
+            .await?;
+
+            log::info!(
+                "Discount code marked as used via sync: code={}, id={:?}",
+                coupon_record.code, local.id
+            );
+        } else if !external_used && local.is_used.unwrap_or(false) {
+            // 外部显示未使用但本地已使用——通常不回滚，记录冲突
+            log::warn!(
+                "Usage state mismatch (local used, external unused), keeping local: code={}, id={:?}",
+                coupon_record.code, local.id
+            );
+        } else {
+            log::debug!(
+                "Discount code already in sync: code={}, used={}",
+                coupon_record.code, external_used
+            );
+        }
+
         Ok(())
     }
 }
