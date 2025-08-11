@@ -1,5 +1,5 @@
 use actix_web::{App, HttpServer, middleware::Logger, web};
-use env_logger::Env;
+use env_logger::{Env, Target};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -16,7 +16,9 @@ use kkss_backend::{
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::init_from_env(Env::default().default_filter_or("info"));
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .target(Target::Stdout)
+        .init();
 
     // 加载配置
     let config = Config::from_toml().expect("无法加载配置文件");
@@ -61,7 +63,11 @@ async fn main() -> std::io::Result<()> {
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
 
     // 启动HTTP服务器
-    log::info!("Starting HTTP server at {}:{}", config.server.host, config.server.port);
+    log::info!(
+        "Starting HTTP server at {}:{}",
+        config.server.host,
+        config.server.port
+    );
 
     HttpServer::new(move || {
         App::new()
