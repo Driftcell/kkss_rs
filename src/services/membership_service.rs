@@ -73,7 +73,8 @@ impl MembershipService {
             return Err(AppError::ValidationError("Cannot downgrade".into()));
         }
 
-        let amount = Self::membership_price_cents(&req.target_member_type)
+        let target_type = req.target_member_type.clone();
+        let amount = Self::membership_price_cents(&target_type)
             .ok_or_else(|| AppError::ValidationError("Unsupported target member type".into()))?;
 
         let payment_intent = self
@@ -97,16 +98,16 @@ impl MembershipService {
         )
         .bind(user_id)
         .bind(&payment_intent_id)
-        .bind(req.target_member_type.to_string())
+        .bind(target_type.clone())
         .bind(amount)
-        .bind(status.to_string())
+        .bind(status)
         .execute(&self.pool).await?;
 
         Ok(CreateMembershipIntentResponse {
             payment_intent_id,
             client_secret: payment_intent.client_secret.unwrap_or_default(),
             amount,
-            target_member_type: req.target_member_type,
+            target_member_type: target_type,
         })
     }
 
@@ -153,7 +154,7 @@ impl MembershipService {
 
         // 升级用户会员类型
         sqlx::query("UPDATE users SET member_type = $1 WHERE id = $2")
-            .bind(rec.target_member_type.to_string())
+            .bind(rec.target_member_type.clone())
             .bind(user_id)
             .execute(&mut *tx)
             .await?;
@@ -161,7 +162,7 @@ impl MembershipService {
         // 更新记录状态
         let success = MembershipPurchaseStatus::Succeeded;
         sqlx::query("UPDATE membership_purchases SET status = $1, stripe_status = $2, updated_at = NOW() WHERE id = $3")
-            .bind(success.to_string())
+            .bind(success)
             .bind(format!("{:?}", payment_intent.status))
             .bind(rec.id)
             .execute(&mut *tx).await?;
