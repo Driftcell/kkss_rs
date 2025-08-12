@@ -190,11 +190,29 @@ impl MembershipService {
                     .await?;
             }
             MemberType::SuperShareholder => {
-                // 10 个 $3 优惠码
+                // 10 个 $3 优惠码，并发创建以减少等待时间（注意：部分失败不会回滚已成功的）
+                let mut handles = Vec::with_capacity(10);
                 for _ in 0..10 {
-                    self.discount_code_service
-                        .create_user_discount_code(user_id, 300, CodeType::PurchaseReward, 1)
-                        .await?;
+                    let svc = self.discount_code_service.clone();
+                    handles.push(tokio::spawn(async move {
+                        svc.create_user_discount_code(user_id, 300, CodeType::PurchaseReward, 1)
+                            .await
+                    }));
+                }
+                for h in handles {
+                    match h.await {
+                        Ok(Ok(_id)) => {}
+                        Ok(Err(e)) => {
+                            log::error!("Failed to create one of super shareholder discount codes: {:?}", e);
+                            return Err(e);
+                        }
+                        Err(join_err) => {
+                            return Err(AppError::InternalError(format!(
+                                "Join error creating discount codes: {}",
+                                join_err
+                            )));
+                        }
+                    }
                 }
             }
             MemberType::Fan => { /* 不会进入此分支 */ }
