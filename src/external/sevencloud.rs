@@ -163,7 +163,7 @@ impl SevenCloudAPI {
                 let result: ApiResponse<OrdersData> = response.json().await?;
 
                 if !result.success {
-                    if attempt == 1 && Self::should_retry_login(&result.message) {
+                    if attempt == 1 {
                         log::warn!(
                             "Sevencloud token maybe expired when fetching orders, relogin and retry...: {}",
                             result.message
@@ -230,7 +230,7 @@ impl SevenCloudAPI {
 
                 let result: ApiResponse<CouponsData> = response.json().await?;
                 if !result.success {
-                    if attempt == 1 && Self::should_retry_login(&result.message) {
+                    if attempt == 1 {
                         log::warn!(
                             "Sevencloud token maybe expired when fetching discount codes, relogin and retry...: {}",
                             result.message
@@ -318,7 +318,7 @@ impl SevenCloudAPI {
                 .await?;
             let result: ApiResponse<String> = response.json().await?;
             if !result.success {
-                if attempt == 1 && Self::should_retry_login(&result.message) {
+                if attempt == 1 {
                     log::warn!(
                         "Sevencloud token maybe expired when generating discount code, relogin and retry...: {}",
                         result.message
@@ -351,30 +351,5 @@ impl SevenCloudAPI {
             ));
         }
         Ok(())
-    }
-
-    fn should_retry_login(message: &str) -> bool {
-        let m = message.to_lowercase();
-        // 常见 token 失效/未登录/不可用/需要重新登录相关关键词
-        if m.contains("token") {
-            return true;
-        }
-        // 英文场景
-        if m.contains("login")
-            || m.contains("relogin")
-            || m.contains("expired")
-            || m.contains("unauthorized")
-        {
-            return true;
-        }
-        // 中文场景
-        if m.contains("过期")
-            || m.contains("未登录")
-            || m.contains("重新登录")
-            || m.contains("不可用")
-        {
-            return true;
-        }
-        false
     }
 }
