@@ -53,9 +53,12 @@ impl SyncService {
 
         // 根据会员号查找用户
         let user = if let Some(member_code) = &order_record.member_code {
-            sqlx::query!("SELECT id FROM users WHERE member_code = $1", member_code)
-                .fetch_optional(&self.pool)
-                .await?
+            sqlx::query!(
+                "SELECT id, referrer_id, balance FROM users WHERE member_code = $1",
+                member_code
+            )
+            .fetch_optional(&self.pool)
+            .await?
         } else {
             None
         };
@@ -97,6 +100,63 @@ impl SyncService {
             )
             .execute(&mut *tx)
             .await?;
+
+            // 订单返利：若用户存在推荐人，则用户与推荐人各获得订单金额的 10%
+            // 只有存在推荐人时才发放双方各 10% 返利
+            if let Some(referrer_id) = user.referrer_id {
+                if price_cents > 0 {
+                    let rebate = price_cents / 10; // 向下取整
+                    if rebate > 0 {
+                        // 下单用户返利
+                        let user_new_balance_row = sqlx::query!(
+                            "UPDATE users SET balance = COALESCE(balance,0) + $1 WHERE id = $2 RETURNING balance",
+                            rebate,
+                            user.id
+                        )
+                        .fetch_one(&mut *tx)
+                        .await?;
+                        let user_new_balance = user_new_balance_row.balance.unwrap_or(0);
+                        sqlx::query!(
+                            r#"INSERT INTO sweet_cash_transactions (
+                                user_id, transaction_type, amount, balance_after, related_order_id, description
+                            ) VALUES ($1, 'earn', $2, $3, $4, $5)"#,
+                            user.id,
+                            rebate,
+                            user_new_balance,
+                            order_record.id,
+                            format!("Order rebate 10% for order {}", order_record.id)
+                        )
+                        .execute(&mut *tx)
+                        .await?;
+
+                        // 推荐人返利
+                        let referrer_new_balance_row = sqlx::query!(
+                            "UPDATE users SET balance = COALESCE(balance,0) + $1 WHERE id = $2 RETURNING balance",
+                            rebate,
+                            referrer_id
+                        )
+                        .fetch_one(&mut *tx)
+                        .await?;
+                        let referrer_new_balance = referrer_new_balance_row.balance.unwrap_or(0);
+                        sqlx::query!(
+                            r#"INSERT INTO sweet_cash_transactions (
+                                user_id, transaction_type, amount, balance_after, related_order_id, description
+                            ) VALUES ($1, 'earn', $2, $3, $4, $5)"#,
+                            referrer_id,
+                            rebate,
+                            referrer_new_balance,
+                            order_record.id,
+                            format!("Referral order rebate 10% from user {} order {}", user.id, order_record.id)
+                        )
+                        .execute(&mut *tx)
+                        .await?;
+                        log::info!(
+                            "Order {} rebate distributed: user {} +{} cents & referrer {} +{} cents",
+                            order_record.id, user.id, rebate, referrer_id, rebate
+                        );
+                    }
+                }
+            }
 
             tx.commit().await?;
 
