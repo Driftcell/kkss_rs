@@ -79,7 +79,7 @@ impl DiscountCodeService {
         request: RedeemDiscountCodeRequest,
     ) -> AppResult<RedeemDiscountCodeResponse> {
         // 验证兑换金额
-        let allowed = [(5, 5), (10, 8), (20, 12), (25, 15)];
+        let allowed = [(5, 10)];
         let mut stamps_required: Option<i64> = None;
         for (value_dollars, stamps) in allowed {
             if request.discount_amount == (value_dollars * 100) as i64 {
