@@ -27,8 +27,8 @@ impl MembershipService {
 
     fn membership_price_cents(target: &MemberType) -> Option<i64> {
         match target {
-            MemberType::SweetShareholder => Some(800), // $8 -> 兑换任意配料冰淇淋优惠码
-            MemberType::SuperShareholder => Some(3000), // $30 假设价格，需要根据业务调整
+            MemberType::SweetShareholder => Some(800), // $8
+            MemberType::SuperShareholder => Some(3000), // $30
             MemberType::Fan => None,                   // 不允许购买回Fan
         }
     }
@@ -92,7 +92,6 @@ impl MembershipService {
 
         let status = MembershipPurchaseStatus::Pending;
         let payment_intent_id = payment_intent.id.to_string();
-        // 使用 sqlx::query! 宏进行编译期校验
         sqlx::query!(
             r#"INSERT INTO membership_purchases (user_id, stripe_payment_intent_id, target_member_type, amount, status)
                 VALUES ($1,$2,$3,$4,$5) ON CONFLICT(stripe_payment_intent_id) DO NOTHING"#,
