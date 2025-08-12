@@ -152,7 +152,11 @@ impl SyncService {
                         .await?;
                         log::info!(
                             "Order {} rebate distributed: user {} +{} cents & referrer {} +{} cents",
-                            order_record.id, user.id, rebate, referrer_id, rebate
+                            order_record.id,
+                            user.id,
+                            rebate,
+                            referrer_id,
+                            rebate
                         );
                     }
                 }
@@ -225,7 +229,8 @@ impl SyncService {
             other => {
                 log::warn!(
                     "Unknown is_use value from external coupon: code={}, value={}",
-                    coupon_record.code, other
+                    coupon_record.code,
+                    other
                 );
                 false
             }
@@ -249,18 +254,21 @@ impl SyncService {
 
             log::info!(
                 "Discount code marked as used via sync: code={}, id={:?}",
-                coupon_record.code, local.id
+                coupon_record.code,
+                local.id
             );
         } else if !external_used && local.is_used.unwrap_or(false) {
             // 外部显示未使用但本地已使用——通常不回滚，记录冲突
             log::warn!(
                 "Usage state mismatch (local used, external unused), keeping local: code={}, id={:?}",
-                coupon_record.code, local.id
+                coupon_record.code,
+                local.id
             );
         } else {
             log::debug!(
                 "Discount code already in sync: code={}, used={}",
-                coupon_record.code, external_used
+                coupon_record.code,
+                external_used
             );
         }
 

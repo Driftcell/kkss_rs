@@ -1,5 +1,6 @@
 pub mod common;
 pub mod discount_code;
+pub mod membership_purchase;
 pub mod order;
 pub mod pagination;
 pub mod recharge_record;
@@ -9,6 +10,7 @@ pub mod verification_code;
 
 pub use common::*;
 pub use discount_code::*;
+pub use membership_purchase::*;
 pub use order::*;
 pub use pagination::*;
 pub use recharge_record::*;

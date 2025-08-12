@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::services::RechargeService;
+use crate::services::{MembershipService, RechargeService};
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, Result, web};
 use serde_json::json;
 
@@ -114,5 +114,70 @@ pub fn recharge_config(cfg: &mut web::ServiceConfig) {
             )
             .route("/confirm", web::post().to(confirm_recharge))
             .route("/history", web::get().to(get_history)),
+    );
+}
+
+#[utoipa::path(
+    post,
+    path = "/membership/create-payment-intent",
+    tag = "membership",
+    request_body = CreateMembershipIntentRequest,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "创建会员支付意图成功", body = CreateMembershipIntentResponse),
+        (status = 401, description = "未授权"),
+        (status = 400, description = "请求参数错误")
+    )
+)]
+pub async fn create_membership_payment_intent(
+    membership_service: web::Data<MembershipService>,
+    req: HttpRequest,
+    request: web::Json<CreateMembershipIntentRequest>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+    match membership_service
+        .create_membership_intent(user_id, request.into_inner())
+        .await
+    {
+        Ok(resp) => Ok(HttpResponse::Ok().json(json!({"success": true, "data": resp}))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/membership/confirm",
+    tag = "membership",
+    request_body = ConfirmMembershipRequest,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "确认会员支付成功", body = ConfirmMembershipResponse),
+        (status = 401, description = "未授权"),
+        (status = 400, description = "请求参数错误")
+    )
+)]
+pub async fn confirm_membership(
+    membership_service: web::Data<MembershipService>,
+    req: HttpRequest,
+    request: web::Json<ConfirmMembershipRequest>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+    match membership_service
+        .confirm_membership(user_id, request.into_inner())
+        .await
+    {
+        Ok(resp) => Ok(HttpResponse::Ok().json(json!({"success": true, "data": resp}))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+pub fn membership_config(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/membership")
+            .route(
+                "/create-payment-intent",
+                web::post().to(create_membership_payment_intent),
+            )
+            .route("/confirm", web::post().to(confirm_membership)),
     );
 }

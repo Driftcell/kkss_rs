@@ -301,15 +301,22 @@ impl DiscountCodeService {
                 )
                 .fetch_optional(&self.pool)
                 .await?;
-                if exists.is_none() { break candidate; }
-                if tries >= 10 { return Err(AppError::InternalError("Failed to generate unique discount code".into())); }
+                if exists.is_none() {
+                    break candidate;
+                }
+                if tries >= 10 {
+                    return Err(AppError::InternalError(
+                        "Failed to generate unique discount code".into(),
+                    ));
+                }
             }
         };
 
         let discount_dollars = amount as f64 / 100.0;
         {
             let mut api = self.sevencloud_api.lock().await;
-            api.generate_discount_code(&code, discount_dollars, expire_months).await?;
+            api.generate_discount_code(&code, discount_dollars, expire_months)
+                .await?;
         }
 
         // 插入数据库

@@ -260,7 +260,7 @@ impl SevenCloudAPI {
     }
 
     /// 生成优惠码
-    /// 
+    ///
     /// # 参数
     /// * `code` - 优惠码
     /// * `discount` - 折扣金额，单位为美元
@@ -307,7 +307,7 @@ impl SevenCloudAPI {
         params.insert("adminId", self.admin_id.unwrap().to_string());
 
         let mut attempt = 0;
-    let _result = loop {
+        let _result = loop {
             attempt += 1;
             let response = self
                 .client
@@ -360,11 +360,19 @@ impl SevenCloudAPI {
             return true;
         }
         // 英文场景
-        if m.contains("login") || m.contains("relogin") || m.contains("expired") || m.contains("unauthorized") {
+        if m.contains("login")
+            || m.contains("relogin")
+            || m.contains("expired")
+            || m.contains("unauthorized")
+        {
             return true;
         }
         // 中文场景
-        if m.contains("过期") || m.contains("未登录") || m.contains("重新登录") || m.contains("不可用") {
+        if m.contains("过期")
+            || m.contains("未登录")
+            || m.contains("重新登录")
+            || m.contains("不可用")
+        {
             return true;
         }
         false

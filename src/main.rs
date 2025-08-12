@@ -77,6 +77,11 @@ async fn main() -> std::io::Result<()> {
     let user_service = UserService::new(pool.clone());
     let order_service = OrderService::new(pool.clone());
     let recharge_service = RechargeService::new(pool.clone(), stripe_service.clone());
+    let membership_service = MembershipService::new(
+        pool.clone(),
+        stripe_service.clone(),
+        discount_code_service.clone(),
+    );
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
 
     // 启动后台定时同步任务 (每分钟同步最近一周订单与优惠码)
@@ -127,6 +132,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(order_service.clone()))
             .app_data(web::Data::new(discount_code_service.clone()))
             .app_data(web::Data::new(recharge_service.clone()))
+            .app_data(web::Data::new(membership_service.clone()))
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(sync_service.clone()))
             .configure(swagger_config)
@@ -138,6 +144,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(handlers::order_config)
                     .configure(handlers::discount_code_config)
                     .configure(handlers::recharge_config)
+                    .configure(handlers::membership_config)
                     .configure(handlers::admin_config),
             )
     })
