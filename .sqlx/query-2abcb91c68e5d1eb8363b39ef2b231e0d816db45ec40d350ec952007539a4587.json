@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sweet_cash_transactions (\n                user_id, transaction_type, amount, balance_after, related_discount_code_id, description\n            ) VALUES ($1, 'redeem', $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2abcb91c68e5d1eb8363b39ef2b231e0d816db45ec40d350ec952007539a4587"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "recharge_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2afad5b4b34c050be01ac8231119713f68c04999f7ae9f6b449c533e871256b"
+}

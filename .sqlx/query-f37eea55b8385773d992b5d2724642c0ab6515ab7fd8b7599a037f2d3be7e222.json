@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO discount_codes (\n                user_id, code, discount_amount, code_type, expires_at\n            ) VALUES ($1, $2, $3, $4, $5)\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8",
+        {
+          "Custom": {
+            "name": "code_type",
+            "kind": {
+              "Enum": [
+                "welcome",
+                "referral",
+                "purchase_reward",
+                "redeemed"
+              ]
+            }
+          }
+        },
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f37eea55b8385773d992b5d2724642c0ab6515ab7fd8b7599a037f2d3be7e222"
+}

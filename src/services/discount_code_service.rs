@@ -32,18 +32,20 @@ impl DiscountCodeService {
         let limit = params.get_limit() as i64;
 
         // 获取总数
-        let total: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM discount_codes WHERE user_id = $1")
-                .bind(user_id)
-                .fetch_one(&self.pool)
-                .await?;
+        let total: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) as "count!: i64" FROM discount_codes WHERE user_id = $1"#,
+            user_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
 
         // 获取优惠码列表
-        let discount_codes = sqlx::query_as::<_, DiscountCode>(
+        let discount_codes = sqlx::query_as!(
+            DiscountCode,
             r#"
             SELECT
                 id, user_id, code, discount_amount,
-                code_type,
+                code_type as "code_type: _",
                 is_used, used_at, expires_at, external_id,
                 created_at, updated_at
             FROM discount_codes
@@ -51,10 +53,10 @@ impl DiscountCodeService {
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#,
+            user_id,
+            limit,
+            offset
         )
-        .bind(user_id)
-        .bind(limit)
-        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -100,7 +102,7 @@ impl DiscountCodeService {
         let mut tx = self.pool.begin().await?;
 
         // 检查用户 stamps 余额
-        let user = sqlx::query!("SELECT stamps FROM users WHERE id = $1", user_id)
+        let user = sqlx::query!(r#"SELECT stamps FROM users WHERE id = $1"#, user_id)
             .fetch_optional(&mut *tx)
             .await?;
 
@@ -112,11 +114,13 @@ impl DiscountCodeService {
         }
 
         // 扣除 stamps
-        sqlx::query("UPDATE users SET stamps = stamps - $1 WHERE id = $2")
-            .bind(stamps_needed)
-            .bind(user_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            r#"UPDATE users SET stamps = stamps - $1 WHERE id = $2"#,
+            stamps_needed,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         // 生成优惠码
         let code = generate_six_digit_code(); // 生成6位数字码
@@ -132,19 +136,19 @@ impl DiscountCodeService {
 
         // 保存优惠码到本地数据库
         let code_type_enum = CodeType::Redeemed;
-        let discount_code_id: i64 = sqlx::query_scalar(
+        let discount_code_id: i64 = sqlx::query_scalar!(
             r#"
             INSERT INTO discount_codes (
                 user_id, code, discount_amount, code_type, expires_at
             ) VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             "#,
+            user_id,
+            code,
+            request.discount_amount,
+            code_type_enum as _,
+            expires_at
         )
-        .bind(user_id)
-        .bind(&code)
-        .bind(request.discount_amount)
-        .bind(code_type_enum)
-        .bind(expires_at)
         .fetch_one(&mut *tx)
         .await?;
 
@@ -189,7 +193,7 @@ impl DiscountCodeService {
         let mut tx = self.pool.begin().await?;
 
         // 查询余额
-        let user = sqlx::query!("SELECT balance FROM users WHERE id = $1", user_id)
+        let user = sqlx::query!(r#"SELECT balance FROM users WHERE id = $1"#, user_id)
             .fetch_optional(&mut *tx)
             .await?;
         let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
@@ -201,11 +205,13 @@ impl DiscountCodeService {
         }
 
         // 扣减余额
-        sqlx::query("UPDATE users SET balance = balance - $1 WHERE id = $2")
-            .bind(request.discount_amount)
-            .bind(user_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            r#"UPDATE users SET balance = balance - $1 WHERE id = $2"#,
+            request.discount_amount,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         // 生成优惠码
         let code = generate_six_digit_code();
@@ -218,33 +224,33 @@ impl DiscountCodeService {
         }
 
         let code_type_enum = CodeType::Redeemed; // 与 stamps 兑换一致，标记为 redeemed
-        let discount_code_id: i64 = sqlx::query_scalar(
+        let discount_code_id: i64 = sqlx::query_scalar!(
             r#"
             INSERT INTO discount_codes (
                 user_id, code, discount_amount, code_type, expires_at
             ) VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             "#,
+            user_id,
+            code,
+            request.discount_amount,
+            code_type_enum as _,
+            expires_at
         )
-        .bind(user_id)
-        .bind(&code)
-        .bind(request.discount_amount)
-        .bind(code_type_enum)
-        .bind(expires_at)
         .fetch_one(&mut *tx)
         .await?;
 
         // 记录 sweet_cash_transactions (Redeem)
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO sweet_cash_transactions (
                 user_id, transaction_type, amount, balance_after, related_discount_code_id, description
             ) VALUES ($1, 'redeem', $2, $3, $4, $5)"#,
+            user_id,
+            request.discount_amount,
+            current_balance - request.discount_amount,
+            discount_code_id,
+            format!("Redeem balance for discount code {}", code)
         )
-        .bind(user_id)
-        .bind(request.discount_amount)
-        .bind(current_balance - request.discount_amount)
-        .bind(discount_code_id)
-        .bind(format!("Redeem balance for discount code {}", code))
         .execute(&mut *tx)
         .await?;
 
