@@ -203,7 +203,10 @@ impl MembershipService {
                     match h.await {
                         Ok(Ok(_id)) => {}
                         Ok(Err(e)) => {
-                            log::error!("Failed to create one of super shareholder discount codes: {:?}", e);
+                            log::error!(
+                                "Failed to create one of super shareholder discount codes: {:?}",
+                                e
+                            );
                             return Err(e);
                         }
                         Err(join_err) => {
@@ -215,7 +218,9 @@ impl MembershipService {
                     }
                 }
             }
-            MemberType::Fan => { /* 不会进入此分支 */ }
+            MemberType::Fan => {
+                unreachable!("Fan membership should not reach here")
+            }
         }
 
         tx.commit().await?;
