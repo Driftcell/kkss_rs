@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, stripe_payment_intent_id,\n               target_member_type as \"target_member_type: MemberType\",\n               amount,\n               status as \"status: MembershipPurchaseStatus\",\n               stripe_status, created_at, updated_at\n               FROM membership_purchases WHERE stripe_payment_intent_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "stripe_payment_intent_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "target_member_type: MemberType",
+        "type_info": {
+          "Custom": {
+            "name": "member_type",
+            "kind": {
+              "Enum": [
+                "fan",
+                "sweet_shareholder",
+                "super_shareholder"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "status: MembershipPurchaseStatus",
+        "type_info": {
+          "Custom": {
+            "name": "membership_purchase_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "stripe_status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a45db3bdd53d0faeedf1c32937d8abb3583e04f122c1fe7efc40ff40227ad865"
+}

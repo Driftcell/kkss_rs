@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE membership_purchases SET status = $1, stripe_status = $2, updated_at = NOW() WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "membership_purchase_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ]
+            }
+          }
+        },
+        "Varchar",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76a3366a056303a0f63e65b943c15cd5f688f373514d1d6ba45a788f5af83f0f"
+}

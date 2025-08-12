@@ -92,16 +92,18 @@ impl MembershipService {
 
         let status = MembershipPurchaseStatus::Pending;
         let payment_intent_id = payment_intent.id.to_string();
-        sqlx::query(
+        // 使用 sqlx::query! 宏进行编译期校验
+        sqlx::query!(
             r#"INSERT INTO membership_purchases (user_id, stripe_payment_intent_id, target_member_type, amount, status)
                 VALUES ($1,$2,$3,$4,$5) ON CONFLICT(stripe_payment_intent_id) DO NOTHING"#,
+            user_id,
+            payment_intent_id,
+            target_type as _,
+            amount,
+            status as _
         )
-        .bind(user_id)
-        .bind(&payment_intent_id)
-        .bind(target_type.clone())
-        .bind(amount)
-        .bind(status)
-        .execute(&self.pool).await?;
+        .execute(&self.pool)
+        .await?;
 
         Ok(CreateMembershipIntentResponse {
             payment_intent_id,
@@ -127,13 +129,19 @@ impl MembershipService {
 
         let mut tx = self.pool.begin().await?;
         // 读取记录
-        let rec = sqlx::query_as::<_, MembershipPurchaseRecord>(
-            r#"SELECT id, user_id, stripe_payment_intent_id, target_member_type as "target_member_type: MemberType", amount, status as "status: MembershipPurchaseStatus", stripe_status, created_at, updated_at
+        let rec = sqlx::query_as!(
+            MembershipPurchaseRecord,
+            r#"SELECT id, user_id, stripe_payment_intent_id,
+               target_member_type as "target_member_type: MemberType",
+               amount,
+               status as "status: MembershipPurchaseStatus",
+               stripe_status, created_at, updated_at
                FROM membership_purchases WHERE stripe_payment_intent_id = $1 AND user_id = $2"#,
+            req.payment_intent_id,
+            user_id
         )
-        .bind(&req.payment_intent_id)
-        .bind(user_id)
-        .fetch_optional(&mut *tx).await?;
+        .fetch_optional(&mut *tx)
+        .await?;
         let mut rec =
             rec.ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
 
@@ -153,19 +161,24 @@ impl MembershipService {
         }
 
         // 升级用户会员类型
-        sqlx::query("UPDATE users SET member_type = $1 WHERE id = $2")
-            .bind(rec.target_member_type.clone())
-            .bind(user_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            "UPDATE users SET member_type = $1 WHERE id = $2",
+            rec.target_member_type as _,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         // 更新记录状态
         let success = MembershipPurchaseStatus::Succeeded;
-        sqlx::query("UPDATE membership_purchases SET status = $1, stripe_status = $2, updated_at = NOW() WHERE id = $3")
-            .bind(success)
-            .bind(format!("{:?}", payment_intent.status))
-            .bind(rec.id)
-            .execute(&mut *tx).await?;
+        sqlx::query!(
+            "UPDATE membership_purchases SET status = $1, stripe_status = $2, updated_at = NOW() WHERE id = $3",
+            success as _,
+            format!("{:?}", payment_intent.status),
+            rec.id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         // 发放福利（使用 DiscountCodeService 以保持统一逻辑 & 外部七云同步）
         match rec.target_member_type {
