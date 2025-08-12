@@ -259,6 +259,15 @@ impl SevenCloudAPI {
         Ok(all_coupons)
     }
 
+    /// 生成优惠码
+    /// 
+    /// # 参数
+    /// * `code` - 优惠码
+    /// * `discount` - 折扣金额，单位为美元
+    /// * `expire_months` - 过期月份
+    ///
+    /// # 返回值
+    /// 返回一个布尔值，表示优惠码是否生成成功。
     pub async fn generate_discount_code(
         &mut self,
         code: &str,

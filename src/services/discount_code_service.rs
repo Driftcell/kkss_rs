@@ -266,4 +266,65 @@ impl DiscountCodeService {
             remaining_balance: current_balance - request.discount_amount,
         })
     }
+
+    /// 通用创建用户优惠码（注册奖励、推荐奖励等）
+    /// amount: 美分；expire_months: 1-3
+    pub async fn create_user_discount_code(
+        &self,
+        user_id: i64,
+        amount: i64,
+        code_type: CodeType,
+        expire_months: u32,
+    ) -> AppResult<i64> {
+        if amount <= 0 {
+            return Err(AppError::ValidationError(
+                "Discount amount must be positive".into(),
+            ));
+        }
+        if expire_months == 0 || expire_months > 3 {
+            return Err(AppError::ValidationError(
+                "Expiration period must be between 1-3 months".into(),
+            ));
+        }
+
+        let expires_at = Utc::now() + Duration::days(30 * expire_months as i64);
+
+        // 生成唯一 6 位数字码
+        let code = {
+            let mut tries = 0;
+            loop {
+                tries += 1;
+                let candidate = generate_six_digit_code();
+                let exists = sqlx::query_scalar!(
+                    "SELECT 1 as \"exists!: i64\" FROM discount_codes WHERE code = $1",
+                    candidate
+                )
+                .fetch_optional(&self.pool)
+                .await?;
+                if exists.is_none() { break candidate; }
+                if tries >= 10 { return Err(AppError::InternalError("Failed to generate unique discount code".into())); }
+            }
+        };
+
+        let discount_dollars = amount as f64 / 100.0;
+        {
+            let mut api = self.sevencloud_api.lock().await;
+            api.generate_discount_code(&code, discount_dollars, expire_months).await?;
+        }
+
+        // 插入数据库
+        let id: i64 = sqlx::query_scalar!(
+            r#"INSERT INTO discount_codes (user_id, code, discount_amount, code_type, expires_at)
+                VALUES ($1, $2, $3, $4, $5) RETURNING id"#,
+            user_id,
+            code,
+            amount,
+            code_type as _,
+            expires_at
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(id)
+    }
 }

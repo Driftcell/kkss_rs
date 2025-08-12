@@ -1,7 +1,7 @@
 use actix_web::{App, HttpServer, middleware::Logger, web};
+use chrono::Local; // timestamp in log lines
 use env_logger::{Env, Target};
 use std::io::Write; // for env_logger custom formatter
-use chrono::Local;  // timestamp in log lines
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -66,17 +66,16 @@ async fn main() -> std::io::Result<()> {
     }
     let sevencloud_api = Arc::new(Mutex::new(sevencloud_api));
 
-    // 创建服务
+    // 创建服务 (注意顺序: 先创建依赖，再注入)
+    let discount_code_service = DiscountCodeService::new(pool.clone(), sevencloud_api.clone());
     let auth_service = AuthService::new(
         pool.clone(),
         jwt_service.clone(),
         twilio_service,
-        sevencloud_api.clone(),
+        discount_code_service.clone(),
     );
-
     let user_service = UserService::new(pool.clone());
     let order_service = OrderService::new(pool.clone());
-    let discount_code_service = DiscountCodeService::new(pool.clone(), sevencloud_api.clone());
     let recharge_service = RechargeService::new(pool.clone(), stripe_service.clone());
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
 

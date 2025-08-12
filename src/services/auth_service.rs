@@ -1,18 +1,17 @@
 use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
+use crate::services::DiscountCodeService;
 use crate::utils::*;
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AuthService {
     pool: PgPool,
     jwt_service: JwtService,
     twilio_service: TwilioService,
-    sevencloud_api: Arc<Mutex<SevenCloudAPI>>,
+    discount_code_service: DiscountCodeService,
 }
 
 impl AuthService {
@@ -20,13 +19,13 @@ impl AuthService {
         pool: PgPool,
         jwt_service: JwtService,
         twilio_service: TwilioService,
-        sevencloud_api: Arc<Mutex<SevenCloudAPI>>,
+        discount_code_service: DiscountCodeService,
     ) -> Self {
         Self {
             pool,
             jwt_service,
             twilio_service,
-            sevencloud_api,
+            discount_code_service,
         }
     }
 
@@ -162,17 +161,16 @@ impl AuthService {
         .fetch_one(&self.pool)
         .await?;
 
-        // 根据是否有推荐人发放不同的优惠码
         if let Some(referrer_user_id) = referrer_id {
-            // 有推荐人的情况：给推荐人和新用户都发放推荐优惠码
-            // 给推荐人发放推荐奖励优惠码（$1.0）
-            self.create_referral_discount_code(referrer_user_id, 50)
-                .await?; // 50美分
-
-            // 给新用户发放推荐优惠码（$0.5）
-            self.create_referral_discount_code(user_id, 50).await?; // 50美分
+            self.discount_code_service
+                .create_user_discount_code(referrer_user_id, 50, CodeType::Referral, 3)
+                .await?;
         }
-        // 如果没有推荐人，则不发放任何优惠码
+
+        // 给新用户发放欢迎优惠码（$0.5）
+        self.discount_code_service
+            .create_user_discount_code(user_id, 50, CodeType::Welcome, 3)
+            .await?;
 
         // 生成JWT令牌
         let access_token = self
@@ -333,23 +331,7 @@ impl AuthService {
         user.ok_or_else(|| AppError::NotFound("User not found".to_string()))
     }
 
-    async fn create_referral_discount_code(&self, _user_id: i64, amount: i64) -> AppResult<()> {
-        // 生成6位数字优惠码
-        let code = generate_six_digit_code();
-
-        // 将美分转换为美元
-        let discount_dollars = amount as f64 / 100.0;
-
-        // 使用SevenCloud API生成优惠码
-        let mut api = self.sevencloud_api.lock().await;
-        // 尝试登录 (若已登录成功则后续接口正常使用)
-        let _ = api.login().await; // 忽略重复登录错误
-        // 生成优惠码，有效期3个月 (内部有 token 失效自动重试)
-        api.generate_discount_code(&code, discount_dollars, 3)
-            .await?;
-
-        Ok(())
-    }
+    // 原 create_referral_discount_code 已迁移到 DiscountCodeService::create_user_discount_code
 
     // 清理过期的验证码
     pub async fn cleanup_expired_verification_codes(&self) -> AppResult<()> {
