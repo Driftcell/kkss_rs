@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id as \"id!: i64\", member_code, phone, username, password_hash, birthday,\n                member_type as \"member_type: MemberType\",\n                balance, stamps, referrer_id, referral_code,\n                created_at, updated_at\n            FROM users\n            WHERE phone = $1\n            ",
+  "query": "\n            SELECT\n                id, member_code, phone, username, password_hash, birthday,\n                member_type as \"member_type: MemberType\",\n                balance, stamps, referrer_id, referral_code,\n                created_at, updated_at\n            FROM users\n            WHERE phone = $1\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!: i64",
+        "name": "id",
         "type_info": "Int8"
       },
       {
@@ -101,5 +101,5 @@
       true
     ]
   },
-  "hash": "856a2e6f98b1e83146e1151edb4d8dc559f7a54e1fa392dca3bf8bfd8a944ab2"
+  "hash": "025916ba32f8652c1988978d858f2b6045c205960813834f9bd3ff44178daa9b"
 }

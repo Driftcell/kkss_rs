@@ -180,9 +180,8 @@ impl AuthService {
             .jwt_service
             .generate_refresh_token(user_id, &member_code)?;
 
-        // 获取完整用户信息
-        let user = self.get_user_by_id(user_id).await?;
-        let user_response = UserResponse::from(user);
+        // 获取完整用户信息（包含推荐人数）
+        let user_response = self.get_user_with_referrals(user_id).await?;
 
         Ok(AuthResponse {
             user: user_response,
@@ -195,25 +194,8 @@ impl AuthService {
     pub async fn login(&self, request: LoginRequest) -> AppResult<AuthResponse> {
         // 验证手机号格式
         validate_us_phone(&request.phone)?;
-
-        // 查找用户
-        let user = sqlx::query_as!(
-            User,
-            r#"
-            SELECT
-                id as "id!: i64", member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: MemberType",
-                balance, stamps, referrer_id, referral_code,
-                created_at, updated_at
-            FROM users
-            WHERE phone = $1
-            "#,
-            request.phone
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        let user = user.ok_or_else(|| {
+        // 通过手机号获取用户（避免重复查询）
+        let user = self.get_user_by_phone(&request.phone).await.map_err(|_| {
             AppError::AuthError("User does not exist or password is incorrect".to_string())
         })?;
 
@@ -233,7 +215,8 @@ impl AuthService {
             .jwt_service
             .generate_refresh_token(user.id, &user.member_code)?;
 
-        let user_response = UserResponse::from(user);
+        // 使用已获取的 user 构建带推荐数的响应，避免再次按 id 查询
+        let user_response = self.build_user_response_with_referrals(user).await?;
 
         Ok(AuthResponse {
             user: user_response,
@@ -252,14 +235,12 @@ impl AuthService {
             .map_err(|_| AppError::AuthError("Invalid token".to_string()))?;
 
         // 获取用户信息
-        let user = self.get_user_by_id(user_id).await?;
+        let user_response = self.get_user_with_referrals(user_id).await?;
 
         // 生成新的访问令牌
         let access_token = self
             .jwt_service
-            .generate_access_token(user.id, &user.member_code)?;
-
-        let user_response = UserResponse::from(user);
+            .generate_access_token(user_response.id, &user_response.member_code)?;
 
         Ok(AuthResponse {
             user: user_response,
@@ -331,7 +312,44 @@ impl AuthService {
         user.ok_or_else(|| AppError::NotFound("User not found".to_string()))
     }
 
-    // 原 create_referral_discount_code 已迁移到 DiscountCodeService::create_user_discount_code
+    async fn get_user_by_phone(&self, phone: &str) -> AppResult<User> {
+        let user = sqlx::query_as!(
+            User,
+            r#"
+            SELECT
+                id, member_code, phone, username, password_hash, birthday,
+                member_type as "member_type: MemberType",
+                balance, stamps, referrer_id, referral_code,
+                created_at, updated_at
+            FROM users
+            WHERE phone = $1
+            "#,
+            phone
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        user.ok_or_else(|| AppError::NotFound("User not found".to_string()))
+    }
+
+    async fn build_user_response_with_referrals(&self, user: User) -> AppResult<UserResponse> {
+        let total_referrals = sqlx::query_scalar!(
+            "SELECT COUNT(*) as count FROM users WHERE referrer_id = $1",
+            user.id
+        )
+        .fetch_one(&self.pool)
+        .await?
+        .unwrap_or(0);
+
+        let mut user_response = UserResponse::from(user);
+        user_response.total_referrals = total_referrals;
+        Ok(user_response)
+    }
+
+    async fn get_user_with_referrals(&self, user_id: i64) -> AppResult<UserResponse> {
+        let user = self.get_user_by_id(user_id).await?;
+        self.build_user_response_with_referrals(user).await
+    }
 
     // 清理过期的验证码
     pub async fn cleanup_expired_verification_codes(&self) -> AppResult<()> {
