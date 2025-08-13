@@ -28,9 +28,9 @@ impl RechargeService {
         request: crate::models::CreatePaymentIntentRequest,
     ) -> AppResult<CreatePaymentIntentResponse> {
         // 验证充值金额
-        if ![10000, 20000, 30000, 50000].contains(&request.amount) {
+        if ![500, 1000, 2000, 10000].contains(&request.amount) {
             return Err(AppError::ValidationError(
-                "The recharge amount must be $100, $200, $300, or $500".to_string(),
+                "The recharge amount must be $5, $10, $20, or $100".to_string(),
             ));
         }
 
