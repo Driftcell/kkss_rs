@@ -122,8 +122,6 @@ impl SevenCloudAPI {
         start_date: &str,
         end_date: &str,
     ) -> AppResult<Vec<OrderRecord>> {
-        self.ensure_logged_in()?;
-
         let url = format!("{}/ORDER-SERVER/tOrder/pageOrder", self.config.base_url);
         let mut all_orders = Vec::new();
         let mut current_page = 1;
@@ -199,8 +197,6 @@ impl SevenCloudAPI {
         &mut self,
         is_use: Option<bool>,
     ) -> AppResult<Vec<CouponRecord>> {
-        self.ensure_logged_in()?;
-
         let url = format!("{}/SZWL-SERVER/tPromoCode/list", self.config.base_url);
         let mut all_coupons = Vec::new();
         let mut current_page = 1;
@@ -274,8 +270,6 @@ impl SevenCloudAPI {
         discount: f64,
         expire_months: u32,
     ) -> AppResult<bool> {
-        self.ensure_logged_in()?;
-
         if code.len() != 6 || !code.chars().all(|c| c.is_digit(10)) {
             return Err(AppError::ValidationError(
                 "Invalid discount code format".to_string(),
@@ -342,14 +336,5 @@ impl SevenCloudAPI {
         );
 
         Ok(true)
-    }
-
-    fn ensure_logged_in(&self) -> AppResult<()> {
-        if self.token.is_none() || self.admin_id.is_none() {
-            return Err(AppError::ExternalApiError(
-                "Not logged in to Sevencloud API".to_string(),
-            ));
-        }
-        Ok(())
     }
 }
