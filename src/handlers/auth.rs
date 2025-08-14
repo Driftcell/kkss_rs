@@ -22,7 +22,6 @@ pub async fn send_code(
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,
             "data": response,
-            "message": "验证码已发送"
         }))),
         Err(e) => Ok(e.error_response()),
     }
@@ -135,29 +134,12 @@ pub async fn refresh(
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/auth/logout",
-    tag = "auth",
-    responses(
-        (status = 200, description = "登出成功")
-    )
-)]
-pub async fn logout() -> Result<HttpResponse> {
-    // 简单的登出响应，实际的令牌失效应该在客户端处理
-    Ok(HttpResponse::Ok().json(json!({
-        "success": true,
-        "message": "已成功登出"
-    })))
-}
-
 pub fn auth_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/auth")
             .route("/send-code", web::post().to(send_code))
             .route("/register", web::post().to(register))
             .route("/login", web::post().to(login))
-            .route("/refresh", web::post().to(refresh))
-            .route("/logout", web::post().to(logout)),
+            .route("/refresh", web::post().to(refresh)),
     );
 }
