@@ -28,7 +28,6 @@ impl Modify for SecurityAddon {
         handlers::auth::register,
         handlers::auth::login,
         handlers::auth::refresh,
-        handlers::auth::logout,
         handlers::user::get_profile,
         handlers::user::update_profile,
         handlers::user::get_referrals,
