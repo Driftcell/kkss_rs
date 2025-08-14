@@ -112,7 +112,7 @@ impl StripeService {
         let payment_intent = PaymentIntent::create(&self.client, create_payment_intent)
             .await
             .map_err(|e| {
-                AppError::ExternalApiError(format!("Failed to create payment intent: {}", e))
+                AppError::ExternalApiError(format!("Failed to create payment intent: {e}"))
             })?;
 
         Ok(payment_intent)
@@ -132,12 +132,12 @@ impl StripeService {
         payment_intent_id: &str,
     ) -> AppResult<PaymentIntent> {
         let payment_intent_id = PaymentIntentId::from_str(payment_intent_id)
-            .map_err(|e| AppError::ValidationError(format!("Invalid payment intent ID: {}", e)))?;
+            .map_err(|e| AppError::ValidationError(format!("Invalid payment intent ID: {e}")))?;
 
         let payment_intent = PaymentIntent::retrieve(&self.client, &payment_intent_id, &[])
             .await
             .map_err(|e| {
-                AppError::ExternalApiError(format!("Failed to retrieve payment intent: {}", e))
+                AppError::ExternalApiError(format!("Failed to retrieve payment intent: {e}"))
             })?;
 
         Ok(payment_intent)
@@ -169,7 +169,7 @@ impl StripeService {
         let event =
             stripe::Webhook::construct_event(payload, signature, &self.config.webhook_secret)
                 .map_err(|e| {
-                    AppError::AuthError(format!("Webhook signature verification failed: {}", e))
+                    AppError::AuthError(format!("Webhook signature verification failed: {e}"))
                 })?;
 
         Ok(event)
@@ -227,7 +227,7 @@ impl StripeService {
             return Err(AppError::ValidationError(format!(
                 "Minimum recharge amount is {} {}",
                 if currency == "jpy" {
-                    format!("{}", min_amount)
+                    format!("{min_amount}")
                 } else {
                     format!("{:.2}", min_amount as f64 / 100.0)
                 },

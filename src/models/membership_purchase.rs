@@ -78,7 +78,7 @@ impl From<MembershipPurchaseRecord> for MembershipPurchaseRecordResponse {
             amount: r.amount,
             target_member_type: r.target_member_type,
             status: r.status,
-            created_at: r.created_at.unwrap_or_else(|| Utc::now()),
+            created_at: r.created_at.unwrap_or_else(Utc::now),
         }
     }
 }

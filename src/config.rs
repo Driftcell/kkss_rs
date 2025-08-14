@@ -62,7 +62,7 @@ impl Config {
         let mut config: Config = match config_result {
             Ok(config_str) => {
                 // 有配置文件：先解析再用环境变量覆盖
-                toml::from_str(&config_str).map_err(|e| format!("解析配置文件失败: {}", e))?
+                toml::from_str(&config_str).map_err(|e| format!("解析配置文件失败: {e}"))?
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 // 无配置文件：使用环境变量与默认值构建
@@ -78,7 +78,7 @@ impl Config {
 
                 // 数据库 URL 在无配置文件时必须提供
                 let database_url = get_env("DATABASE_URL")
-                    .ok_or_else(|| "缺少 DATABASE_URL 环境变量，且未找到配置文件 config.toml")?;
+                    .ok_or("缺少 DATABASE_URL 环境变量，且未找到配置文件 config.toml")?;
 
                 Config {
                     server: ServerConfig {
@@ -118,7 +118,7 @@ impl Config {
                 }
             }
             Err(e) => {
-                return Err(format!("无法读取配置文件 {}: {}", config_path, e).into());
+                return Err(format!("无法读取配置文件 {config_path}: {e}").into());
             }
         };
 

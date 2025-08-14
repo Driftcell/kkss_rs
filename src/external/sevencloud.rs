@@ -270,7 +270,7 @@ impl SevenCloudAPI {
         discount: f64,
         expire_months: u32,
     ) -> AppResult<bool> {
-        if code.len() != 6 || !code.chars().all(|c| c.is_digit(10)) {
+        if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
             return Err(AppError::ValidationError(
                 "Invalid discount code format".to_string(),
             ));
@@ -329,10 +329,7 @@ impl SevenCloudAPI {
         };
 
         log::info!(
-            "Successfully generated discount code: {}, Amount: {}, Expiration: {} months",
-            code,
-            discount,
-            expire_months
+            "Successfully generated discount code: {code}, Amount: {discount}, Expiration: {expire_months} months"
         );
 
         Ok(true)

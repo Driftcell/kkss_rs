@@ -28,16 +28,13 @@ impl SyncService {
 
         for order_record in orders {
             if let Err(e) = self.process_order(order_record).await {
-                log::error!("Failed to process order: {:?}", e);
+                log::error!("Failed to process order: {e:?}");
                 continue;
             }
             processed_count += 1;
         }
 
-        log::info!(
-            "Synchronization complete, processed orders: {}",
-            processed_count
-        );
+        log::info!("Synchronization complete, processed orders: {processed_count}");
         Ok(processed_count)
     }
 
@@ -191,16 +188,13 @@ impl SyncService {
 
         for coupon_record in coupons {
             if let Err(e) = self.process_discount_code(coupon_record).await {
-                log::error!("Failed to process discount code: {:?}", e);
+                log::error!("Failed to process discount code: {e:?}");
                 continue;
             }
             processed_count += 1;
         }
 
-        log::info!(
-            "Synchronization complete, processed discount codes: {}",
-            processed_count
-        );
+        log::info!("Synchronization complete, processed discount codes: {processed_count}");
         Ok(processed_count)
     }
 
@@ -245,8 +239,8 @@ impl SyncService {
             // 转换 use_date (七云时间戳假定为毫秒)；若不存在则使用当前时间
             let used_at = coupon_record
                 .use_date
-                .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
-                .unwrap_or_else(|| chrono::Utc::now());
+                .and_then(chrono::DateTime::from_timestamp_millis)
+                .unwrap_or_else(chrono::Utc::now);
 
             sqlx::query!(
                 r#"UPDATE discount_codes SET is_used = TRUE, used_at = $1, updated_at = NOW() WHERE id = $2"#,

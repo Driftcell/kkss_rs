@@ -11,7 +11,7 @@ pub fn validate_password(password: &str) -> AppResult<()> {
 
     let has_lowercase = password.chars().any(|c| c.is_lowercase());
     let has_uppercase = password.chars().any(|c| c.is_uppercase());
-    let has_digit = password.chars().any(|c| c.is_digit(10));
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
 
     if !has_lowercase || !has_uppercase || !has_digit {
         return Err(AppError::ValidationError(
@@ -25,13 +25,13 @@ pub fn validate_password(password: &str) -> AppResult<()> {
 /// 对密码进行哈希
 pub fn hash_password(password: &str) -> AppResult<String> {
     hash(password, DEFAULT_COST)
-        .map_err(|e| AppError::InternalError(format!("Failed to hash password: {}", e)))
+        .map_err(|e| AppError::InternalError(format!("Failed to hash password: {e}")))
 }
 
 /// 验证密码
 pub fn verify_password(password: &str, hash: &str) -> AppResult<bool> {
     verify(password, hash)
-        .map_err(|e| AppError::InternalError(format!("Failed to verify password: {}", e)))
+        .map_err(|e| AppError::InternalError(format!("Failed to verify password: {e}")))
 }
 
 #[cfg(test)]

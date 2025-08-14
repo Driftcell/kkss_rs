@@ -42,7 +42,7 @@ impl JwtService {
             token_type: "access".to_string(),
         };
 
-        encode(&Header::default(), &claims, &self.encoding_key).map_err(|e| AppError::JwtError(e))
+        encode(&Header::default(), &claims, &self.encoding_key).map_err(AppError::JwtError)
     }
 
     pub fn generate_refresh_token(&self, user_id: i64, member_code: &str) -> AppResult<String> {
@@ -57,14 +57,14 @@ impl JwtService {
             token_type: "refresh".to_string(),
         };
 
-        encode(&Header::default(), &claims, &self.encoding_key).map_err(|e| AppError::JwtError(e))
+        encode(&Header::default(), &claims, &self.encoding_key).map_err(AppError::JwtError)
     }
 
     pub fn verify_token(&self, token: &str) -> AppResult<Claims> {
         let validation = Validation::new(Algorithm::HS256);
         decode::<Claims>(token, &self.decoding_key, &validation)
             .map(|data| data.claims)
-            .map_err(|e| AppError::JwtError(e))
+            .map_err(AppError::JwtError)
     }
 
     pub fn verify_access_token(&self, token: &str) -> AppResult<Claims> {

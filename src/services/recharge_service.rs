@@ -182,8 +182,8 @@ impl RechargeService {
         query: &RechargeQuery,
     ) -> AppResult<PaginatedResponse<RechargeRecordResponse>> {
         let params = PaginationParams::new(query.page, query.per_page);
-        let offset = params.get_offset() as i64;
-        let limit = params.get_limit() as i64;
+        let offset = params.get_offset();
+        let limit = params.get_limit();
 
         // 获取总数
         let total: i64 = sqlx::query_scalar!(
@@ -265,9 +265,7 @@ impl RechargeService {
             Some(record) => record,
             None => {
                 log::warn!(
-                    "Recharge record not found for payment_intent_id: {} and user_id: {}",
-                    payment_intent_id,
-                    user_id
+                    "Recharge record not found for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
                 );
                 return Ok(());
             }
@@ -275,10 +273,7 @@ impl RechargeService {
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
-            log::info!(
-                "Payment already processed for payment_intent_id: {}",
-                payment_intent_id
-            );
+            log::info!("Payment already processed for payment_intent_id: {payment_intent_id}");
             return Ok(());
         }
 
@@ -338,15 +333,11 @@ impl RechargeService {
 
         if result.rows_affected() > 0 {
             log::info!(
-                "Marked payment as failed for payment_intent_id: {} and user_id: {}",
-                payment_intent_id,
-                user_id
+                "Marked payment as failed for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
         } else {
             log::warn!(
-                "No recharge record found to mark as failed for payment_intent_id: {} and user_id: {}",
-                payment_intent_id,
-                user_id
+                "No recharge record found to mark as failed for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
         }
 
@@ -378,15 +369,11 @@ impl RechargeService {
 
         if result.rows_affected() > 0 {
             log::info!(
-                "Marked payment as canceled for payment_intent_id: {} and user_id: {}",
-                payment_intent_id,
-                user_id
+                "Marked payment as canceled for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
         } else {
             log::warn!(
-                "No recharge record found to mark as canceled for payment_intent_id: {} and user_id: {}",
-                payment_intent_id,
-                user_id
+                "No recharge record found to mark as canceled for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
         }
 

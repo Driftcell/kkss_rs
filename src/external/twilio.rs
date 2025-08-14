@@ -52,7 +52,7 @@ impl TwilioService {
             .form(&params)
             .send()
             .await
-            .map_err(|e| AppError::ExternalApiError(format!("Twilio request error: {}", e)))?;
+            .map_err(|e| AppError::ExternalApiError(format!("Twilio request error: {e}")))?;
 
         if !resp.status().is_success() {
             let txt = resp
@@ -60,8 +60,7 @@ impl TwilioService {
                 .await
                 .unwrap_or_else(|_| "Unknown Twilio error".to_string());
             return Err(AppError::ExternalApiError(format!(
-                "Twilio Verify start failed: {}",
-                txt
+                "Twilio Verify start failed: {txt}"
             )));
         }
 
@@ -97,7 +96,7 @@ impl TwilioService {
             .form(&params)
             .send()
             .await
-            .map_err(|e| AppError::ExternalApiError(format!("Twilio request error: {}", e)))?;
+            .map_err(|e| AppError::ExternalApiError(format!("Twilio request error: {e}")))?;
 
         if !resp.status().is_success() {
             let txt = resp
@@ -105,13 +104,12 @@ impl TwilioService {
                 .await
                 .unwrap_or_else(|_| "Unknown Twilio error".to_string());
             return Err(AppError::ExternalApiError(format!(
-                "Twilio Verify check failed: {}",
-                txt
+                "Twilio Verify check failed: {txt}"
             )));
         }
 
         let body: VerifyCheckResponse = resp.json().await.map_err(|e| {
-            AppError::ExternalApiError(format!("Failed to parse Twilio response: {}", e))
+            AppError::ExternalApiError(format!("Failed to parse Twilio response: {e}"))
         })?;
         let approved = body.status.as_deref() == Some("approved") && body.valid.unwrap_or(false);
         Ok(approved)

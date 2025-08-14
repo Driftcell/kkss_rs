@@ -50,7 +50,7 @@ impl ResponseError for AppError {
     fn error_response(&self) -> HttpResponse {
         let (status_code, error_code, message) = match self {
             AppError::ValidationError(msg) => {
-                log::warn!("Validation error: {}", msg);
+                log::warn!("Validation error: {msg}");
                 (
                     actix_web::http::StatusCode::BAD_REQUEST,
                     "VALIDATION_ERROR",
@@ -58,7 +58,7 @@ impl ResponseError for AppError {
                 )
             }
             AppError::AuthError(msg) => {
-                log::warn!("Authentication error: {}", msg);
+                log::warn!("Authentication error: {msg}");
                 (actix_web::http::StatusCode::UNAUTHORIZED, "AUTH_ERROR", msg)
             }
             AppError::NotFound(msg) => (actix_web::http::StatusCode::NOT_FOUND, "NOT_FOUND", msg),
@@ -79,7 +79,7 @@ impl ResponseError for AppError {
                 )
             }
             AppError::ExternalApiError(msg) => {
-                log::error!("External API error: {}", msg);
+                log::error!("External API error: {msg}");
                 (
                     actix_web::http::StatusCode::BAD_GATEWAY,
                     "EXTERNAL_API_ERROR",
@@ -87,7 +87,7 @@ impl ResponseError for AppError {
                 )
             }
             AppError::DatabaseError(err) => {
-                log::error!("Database error: {}", err);
+                log::error!("Database error: {err}");
                 (
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "DATABASE_ERROR",
@@ -95,7 +95,7 @@ impl ResponseError for AppError {
                 )
             }
             AppError::MigrateError(err) => {
-                log::error!("Migration error: {}", err);
+                log::error!("Migration error: {err}");
                 (
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "MIGRATION_ERROR",
@@ -103,7 +103,7 @@ impl ResponseError for AppError {
                 )
             }
             _ => {
-                log::error!("Internal error: {}", self);
+                log::error!("Internal error: {self}");
                 (
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "INTERNAL_ERROR",

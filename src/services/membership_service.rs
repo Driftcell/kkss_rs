@@ -203,15 +203,13 @@ impl MembershipService {
                         Ok(Ok(_id)) => {}
                         Ok(Err(e)) => {
                             log::error!(
-                                "Failed to create one of super shareholder discount codes: {:?}",
-                                e
+                                "Failed to create one of super shareholder discount codes: {e:?}"
                             );
                             return Err(e);
                         }
                         Err(join_err) => {
                             return Err(AppError::InternalError(format!(
-                                "Join error creating discount codes: {}",
-                                join_err
+                                "Join error creating discount codes: {join_err}"
                             )));
                         }
                     }

@@ -95,8 +95,8 @@ pub async fn refresh(
 
     let token = if let Some(auth_value) = auth_header {
         if let Ok(auth_str) = auth_value.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                &auth_str[7..]
+            if let Some(bearer) = auth_str.strip_prefix("Bearer ") {
+                bearer
             } else {
                 return Ok(HttpResponse::Unauthorized().json(json!({
                     "success": false,

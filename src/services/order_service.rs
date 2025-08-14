@@ -19,8 +19,8 @@ impl OrderService {
         query: &OrderQuery,
     ) -> AppResult<PaginatedResponse<OrderResponse>> {
         let params = PaginationParams::new(query.page, query.per_page);
-        let offset = params.get_offset() as i64;
-        let limit = params.get_limit() as i64;
+        let offset = params.get_offset();
+        let limit = params.get_limit();
 
         // 构建查询条件
         let mut where_conditions = vec!["user_id = ?".to_string()];

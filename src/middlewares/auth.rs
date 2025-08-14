@@ -108,7 +108,7 @@ where
         // 放行所有 CORS 预检请求
         if req.method() == Method::OPTIONS {
             let fut = self.service.call(req);
-            return Box::pin(async move { fut.await });
+            return Box::pin(fut);
         }
 
         // 检查是否为公开路径
@@ -116,7 +116,7 @@ where
 
         if self.public_paths.is_public_path(path) {
             let fut = self.service.call(req);
-            return Box::pin(async move { fut.await });
+            return Box::pin(fut);
         }
 
         // 提取Authorization header
@@ -124,11 +124,7 @@ where
 
         let token = if let Some(auth_value) = auth_header {
             if let Ok(auth_str) = auth_value.to_str() {
-                if auth_str.starts_with("Bearer ") {
-                    Some(&auth_str[7..])
-                } else {
-                    None
-                }
+                auth_str.strip_prefix("Bearer ")
             } else {
                 None
             }
@@ -145,7 +141,7 @@ where
                     req.extensions_mut()
                         .insert(claims.sub.parse::<i64>().unwrap_or(0));
                     let fut = self.service.call(req);
-                    Box::pin(async move { fut.await })
+                    Box::pin(fut)
                 }
                 Err(_) => {
                     let error = AppError::AuthError("无效的访问令牌".to_string());

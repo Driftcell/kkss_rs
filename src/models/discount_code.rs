@@ -91,8 +91,8 @@ impl From<DiscountCode> for DiscountCodeResponse {
             discount_amount: code.discount_amount.unwrap_or(0),
             code_type: code.code_type,
             is_used: code.is_used.unwrap_or(false),
-            expires_at: code.expires_at.unwrap_or_else(|| Utc::now()),
-            created_at: code.created_at.unwrap_or_else(|| Utc::now()),
+            expires_at: code.expires_at.unwrap_or_else(Utc::now),
+            created_at: code.created_at.unwrap_or_else(Utc::now),
         }
     }
 }

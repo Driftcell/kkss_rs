@@ -29,8 +29,8 @@ impl DiscountCodeService {
         query: &DiscountCodeQuery,
     ) -> AppResult<PaginatedResponse<DiscountCodeResponse>> {
         let params = PaginationParams::new(query.page, query.per_page);
-        let offset = params.get_offset() as i64;
-        let limit = params.get_limit() as i64;
+        let offset = params.get_offset();
+        let limit = params.get_limit();
 
         // 获取总数
         let total: i64 = sqlx::query_scalar!(

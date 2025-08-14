@@ -62,7 +62,7 @@ async fn main() -> std::io::Result<()> {
 
     let mut sevencloud_api = SevenCloudAPI::new(config.sevencloud.clone());
     if let Err(e) = sevencloud_api.login().await {
-        log::error!("SevenCloud API login failed: {:?}", e);
+        log::error!("SevenCloud API login failed: {e:?}");
     }
     let sevencloud_api = Arc::new(Mutex::new(sevencloud_api));
 
@@ -96,18 +96,14 @@ async fn main() -> std::io::Result<()> {
                 let start_date = start.format("%Y-%m-%d %H:%M:%S").to_string();
                 let end_date = format!("{} 23:59:59", now.format("%Y-%m-%d"));
 
-                log::info!(
-                    "Start syncing orders and discount codes: {} ~ {}",
-                    start_date,
-                    end_date
-                );
+                log::info!("Start syncing orders and discount codes: {start_date} ~ {end_date}");
                 // 同步订单
                 if let Err(e) = sync_service_clone.sync_orders(&start_date, &end_date).await {
-                    log::error!("Failed to sync orders: {:?}", e);
+                    log::error!("Failed to sync orders: {e:?}");
                 }
                 // 同步优惠码
                 if let Err(e) = sync_service_clone.sync_discount_codes().await {
-                    log::error!("Failed to sync discount codes: {:?}", e);
+                    log::error!("Failed to sync discount codes: {e:?}");
                 }
                 // 间隔 60 秒
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;

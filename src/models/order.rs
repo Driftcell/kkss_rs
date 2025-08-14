@@ -46,7 +46,7 @@ impl From<Order> for OrderResponse {
             price: order.price.unwrap_or(0),
             stamps_earned: order.stamps_earned.unwrap_or(0),
             order_status: order.order_status.unwrap_or(0) as i32, // 转换为 i32
-            external_created_at: order.external_created_at.unwrap_or_else(|| Utc::now()),
+            external_created_at: order.external_created_at.unwrap_or_else(Utc::now),
         }
     }
 }

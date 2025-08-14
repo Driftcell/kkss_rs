@@ -130,7 +130,7 @@ impl From<User> for UserResponse {
             stamps: user.stamps.unwrap_or(0),
             referral_code: user.referral_code,
             total_referrals: 0, // 需要单独查询
-            created_at: user.created_at.unwrap_or_else(|| Utc::now()),
+            created_at: user.created_at.unwrap_or_else(Utc::now),
         }
     }
 }

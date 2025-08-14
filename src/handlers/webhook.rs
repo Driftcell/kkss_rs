@@ -33,7 +33,7 @@ pub async fn stripe_webhook(
     let event = match stripe_service.verify_webhook_signature(payload, signature, 0) {
         Ok(event) => event,
         Err(e) => {
-            error!("Webhook signature verification failed: {}", e);
+            error!("Webhook signature verification failed: {e}");
             return Ok(HttpResponse::Unauthorized().json(serde_json::json!({
                 "error": "Invalid signature"
             })));
@@ -54,7 +54,7 @@ pub async fn stripe_webhook(
             })))
         }
         Err(e) => {
-            error!("Failed to process webhook event: {}", e);
+            error!("Failed to process webhook event: {e}");
             // 返回200状态码避免Stripe重试，但记录错误
             Ok(HttpResponse::Ok().json(serde_json::json!({
                 "received": true,
@@ -103,7 +103,7 @@ async fn handle_payment_intent_succeeded(
 
     // 调用recharge_service处理支付成功
     recharge_service
-        .handle_payment_success_webhook(&payment_intent.id.to_string(), user_id)
+        .handle_payment_success_webhook(payment_intent.id.as_ref(), user_id)
         .await?;
 
     Ok(())
@@ -129,7 +129,7 @@ async fn handle_payment_intent_failed(
 
     // 调用recharge_service处理支付失败
     recharge_service
-        .handle_payment_failure_webhook(&payment_intent.id.to_string(), user_id)
+        .handle_payment_failure_webhook(payment_intent.id.as_ref(), user_id)
         .await?;
 
     Ok(())
@@ -155,7 +155,7 @@ async fn handle_payment_intent_canceled(
 
     // 调用recharge_service处理支付取消
     recharge_service
-        .handle_payment_canceled_webhook(&payment_intent.id.to_string(), user_id)
+        .handle_payment_canceled_webhook(payment_intent.id.as_ref(), user_id)
         .await?;
 
     Ok(())

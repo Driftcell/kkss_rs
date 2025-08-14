@@ -16,12 +16,12 @@ pub fn validate_us_phone(phone: &str) -> AppResult<()> {
 
 /// 格式化手机号，确保以+1开头
 pub fn format_us_phone(phone: &str) -> String {
-    let digits: String = phone.chars().filter(|c| c.is_digit(10)).collect();
+    let digits: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
 
     if digits.len() == 11 && digits.starts_with('1') {
-        format!("+{}", digits)
+        format!("+{digits}")
     } else if digits.len() == 10 {
-        format!("+1{}", digits)
+        format!("+1{digits}")
     } else {
         phone.to_string()
     }
@@ -29,7 +29,7 @@ pub fn format_us_phone(phone: &str) -> String {
 
 /// 从美国手机号中提取十位数字作为member_code
 pub fn extract_member_code_from_phone(phone: &str) -> AppResult<String> {
-    let digits: String = phone.chars().filter(|c| c.is_digit(10)).collect();
+    let digits: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
 
     if digits.len() == 11 && digits.starts_with('1') {
         // +1234567890 -> 2345678901
