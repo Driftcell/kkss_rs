@@ -27,9 +27,9 @@ impl MembershipService {
 
     fn membership_price_cents(target: &MemberType) -> Option<i64> {
         match target {
-            MemberType::SweetShareholder => Some(800), // $8
+            MemberType::SweetShareholder => Some(800),  // $8
             MemberType::SuperShareholder => Some(3000), // $30
-            MemberType::Fan => None,                   // 不允许购买回Fan
+            MemberType::Fan => None,                    // 不允许购买回Fan
         }
     }
 

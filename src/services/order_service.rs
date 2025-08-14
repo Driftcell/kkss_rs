@@ -12,6 +12,7 @@ impl OrderService {
         Self { pool }
     }
 
+    /// 获取用户订单记录
     pub async fn get_user_orders(
         &self,
         user_id: i64,

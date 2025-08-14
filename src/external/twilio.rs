@@ -110,13 +110,9 @@ impl TwilioService {
             )));
         }
 
-        let body: VerifyCheckResponse = resp
-            .json()
-            .await
-            .map_err(|e| AppError::ExternalApiError(format!(
-                "Failed to parse Twilio response: {}",
-                e
-            )))?;
+        let body: VerifyCheckResponse = resp.json().await.map_err(|e| {
+            AppError::ExternalApiError(format!("Failed to parse Twilio response: {}", e))
+        })?;
         let approved = body.status.as_deref() == Some("approved") && body.valid.unwrap_or(false);
         Ok(approved)
     }

@@ -28,6 +28,15 @@ impl AuthService {
         }
     }
 
+    /// 发送验证码到指定手机号
+    ///
+    /// # 参数
+    ///
+    /// * `phone`: 手机号
+    ///
+    /// # 返回值
+    ///
+    /// 返回一个包含验证码有效期的响应
     pub async fn send_verification_code(&self, phone: &str) -> AppResult<SendCodeResponse> {
         // 验证手机号格式
         validate_us_phone(phone)?;
@@ -39,6 +48,15 @@ impl AuthService {
         Ok(SendCodeResponse { expires_in: 600 })
     }
 
+    /// 用户注册
+    ///
+    /// # 参数
+    ///
+    /// * `request`: 注册请求
+    ///
+    /// # 返回值
+    ///
+    /// 返回一个包含用户信息的响应
     pub async fn register(&self, request: CreateUserRequest) -> AppResult<AuthResponse> {
         // 验证输入参数
         validate_us_phone(&request.phone)?;
@@ -162,6 +180,14 @@ impl AuthService {
         })
     }
 
+    /// 用户登录
+    ///
+    /// # 参数
+    ///
+    /// * `request`: 登录请求
+    ///
+    /// # 返回值
+    /// 返回一个包含用户信息的响应
     pub async fn login(&self, request: LoginRequest) -> AppResult<AuthResponse> {
         // 验证手机号格式
         validate_us_phone(&request.phone)?;
@@ -197,6 +223,15 @@ impl AuthService {
         })
     }
 
+    /// 刷新用户令牌
+    ///
+    /// # 参数
+    ///
+    /// * `refresh_token`: 刷新令牌
+    ///
+    /// # 返回值
+    ///
+    /// 返回一个包含用户信息的响应
     pub async fn refresh_token(&self, refresh_token: &str) -> AppResult<AuthResponse> {
         // 验证刷新令牌
         let claims = self.jwt_service.verify_refresh_token(refresh_token)?;
@@ -221,8 +256,15 @@ impl AuthService {
         })
     }
 
-    // 本地验证码验证逻辑已移除，改为 Twilio Verify
-
+    /// 根据用户ID获取用户信息
+    ///
+    /// # 参数
+    ///
+    /// * `user_id`: 用户ID
+    ///
+    /// # 返回值
+    ///
+    /// 返回用户信息
     async fn get_user_by_id(&self, user_id: i64) -> AppResult<User> {
         let user = sqlx::query_as!(
             User,
@@ -243,6 +285,15 @@ impl AuthService {
         user.ok_or_else(|| AppError::NotFound("User not found".to_string()))
     }
 
+    /// 根据手机号获取用户信息
+    ///
+    /// # 参数
+    ///
+    /// * `phone`: 用户手机号
+    ///
+    /// # 返回值
+    ///
+    /// 返回用户信息
     async fn get_user_by_phone(&self, phone: &str) -> AppResult<User> {
         let user = sqlx::query_as!(
             User,
@@ -263,6 +314,15 @@ impl AuthService {
         user.ok_or_else(|| AppError::NotFound("User not found".to_string()))
     }
 
+    /// 构建用户响应
+    ///
+    /// # 参数
+    ///
+    /// * `user`: 用户
+    ///
+    /// # 返回值
+    ///
+    /// 返回用户响应
     async fn build_user_response_with_referrals(&self, user: User) -> AppResult<UserResponse> {
         let total_referrals = sqlx::query_scalar!(
             "SELECT COUNT(*) as count FROM users WHERE referrer_id = $1",

@@ -12,6 +12,7 @@ impl UserService {
         Self { pool }
     }
 
+    /// 获取用户个人资料和统计信息
     pub async fn get_user_profile(
         &self,
         user_id: i64,
@@ -49,6 +50,7 @@ impl UserService {
         Ok((user_response, statistics))
     }
 
+    /// 更新用户Profile
     pub async fn update_user_profile(
         &self,
         user_id: i64,
@@ -122,6 +124,7 @@ impl UserService {
         Ok(user_response)
     }
 
+    /// 获取用户推荐列表
     pub async fn get_user_referrals(
         &self,
         user_id: i64,
@@ -166,6 +169,7 @@ impl UserService {
         ))
     }
 
+    /// 获取用户统计信息
     async fn get_user_statistics(&self, user_id: i64) -> AppResult<UserStatistics> {
         // 获取订单统计
         let order_stats = sqlx::query!(

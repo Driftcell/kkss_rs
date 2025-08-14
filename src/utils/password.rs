@@ -5,7 +5,7 @@ use bcrypt::{DEFAULT_COST, hash, verify};
 pub fn validate_password(password: &str) -> AppResult<()> {
     if password.len() < 8 || password.len() > 128 {
         return Err(AppError::ValidationError(
-            "密码长度必须在8-128字符之间".to_string(),
+            "Your password must be between 8 and 128 characters long".to_string(),
         ));
     }
 

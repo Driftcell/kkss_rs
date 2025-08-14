@@ -19,6 +19,7 @@ impl SyncService {
         }
     }
 
+    /// 同步七云订单到本地
     pub async fn sync_orders(&self, start_date: &str, end_date: &str) -> AppResult<usize> {
         let mut api = self.sevencloud_api.lock().await;
         let orders = api.get_orders(start_date, end_date).await?;
@@ -40,6 +41,7 @@ impl SyncService {
         Ok(processed_count)
     }
 
+    /// 处理七云订单
     async fn process_order(&self, order_record: OrderRecord) -> AppResult<()> {
         // 检查订单是否已存在
         let existing = sqlx::query!("SELECT id FROM orders WHERE id = $1", order_record.id)
@@ -180,6 +182,7 @@ impl SyncService {
         Ok(())
     }
 
+    /// 同步七云优惠码
     pub async fn sync_discount_codes(&self) -> AppResult<usize> {
         let mut api = self.sevencloud_api.lock().await;
         let coupons = api.get_discount_codes(None).await?;
@@ -201,6 +204,7 @@ impl SyncService {
         Ok(processed_count)
     }
 
+    /// 处理七云优惠码
     async fn process_discount_code(&self, coupon_record: CouponRecord) -> AppResult<()> {
         // 同步逻辑：依据外部优惠码 code 字段（不使用 external_id），更新本地 is_used/used_at
         // _coupon_record.is_use: "0" 未使用, "1" 已使用

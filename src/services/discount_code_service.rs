@@ -22,6 +22,7 @@ impl DiscountCodeService {
         }
     }
 
+    /// 获取用户的优惠码
     pub async fn get_user_discount_codes(
         &self,
         user_id: i64,
@@ -73,6 +74,7 @@ impl DiscountCodeService {
         ))
     }
 
+    /// 兑换优惠码
     pub async fn redeem_discount_code(
         &self,
         user_id: i64,
@@ -172,6 +174,7 @@ impl DiscountCodeService {
         })
     }
 
+    /// 兑换余额优惠码
     pub async fn redeem_balance_discount_code(
         &self,
         user_id: i64,
@@ -274,7 +277,13 @@ impl DiscountCodeService {
     }
 
     /// 通用创建用户优惠码（注册奖励、推荐奖励等）
-    /// amount: 美分；expire_months: 1-3
+    /// 
+    /// # 参数
+    /// 
+    /// * `user_id`: 用户id
+    /// * `amount`: 美分
+    /// * `code_type`: 优惠码类型
+    /// * `expire_months`: 优惠码有效时间（1-3月）
     pub async fn create_user_discount_code(
         &self,
         user_id: i64,
