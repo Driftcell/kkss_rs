@@ -91,14 +91,3 @@ impl From<RechargeRecord> for RechargeRecordResponse {
         }
     }
 }
-
-/// 根据充值金额计算奖励金额
-pub fn calculate_bonus_amount(amount: i64) -> i64 {
-    match amount {
-        10000 => 1500,  // $100 -> $115 (15%奖励)
-        20000 => 3500,  // $200 -> $235 (17.5%奖励)
-        30000 => 7500,  // $300 -> $375 (25%奖励)
-        50000 => 15000, // $500 -> $650 (30%奖励)
-        _ => 0,
-    }
-}

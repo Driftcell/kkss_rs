@@ -3,7 +3,7 @@ use crate::external::stripe::StripeService;
 use crate::models::{
     ConfirmRechargeRequest, ConfirmRechargeResponse, CreatePaymentIntentResponse,
     PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecord, RechargeRecordResponse,
-    RechargeStatus, calculate_bonus_amount,
+    RechargeStatus,
 };
 use sqlx::PgPool;
 use stripe::PaymentIntentStatus;
@@ -391,5 +391,16 @@ impl RechargeService {
         }
 
         Ok(())
+    }
+}
+
+/// 根据充值金额计算奖励金额
+fn calculate_bonus_amount(amount: i64) -> i64 {
+    match amount {
+        10000 => 1500,  // $5 -> $1.50 (15%奖励)
+        20000 => 3500,  // $10 -> $3.50 (17.5%奖励)
+        30000 => 7500,  // $20 -> $7.50 (25%奖励)
+        50000 => 15000, // $100 -> $15.00 (30%奖励)
+        _ => 0,
     }
 }
