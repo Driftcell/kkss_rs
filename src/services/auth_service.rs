@@ -156,11 +156,6 @@ impl AuthService {
                 .await?;
         }
 
-        // 给新用户发放欢迎优惠码（$0.5）
-        self.discount_code_service
-            .create_user_discount_code(user_id, 50, CodeType::Welcome, 3)
-            .await?;
-
         // 生成JWT令牌
         let access_token = self
             .jwt_service
