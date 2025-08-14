@@ -1,30 +1,23 @@
 use crate::config::TwilioConfig;
 use crate::error::{AppError, AppResult};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SendSmsRequest {
-    #[serde(rename = "To")]
-    pub to: String,
-    #[serde(rename = "From")]
-    pub from: String,
-    #[serde(rename = "Body")]
-    pub body: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SendSmsResponse {
-    pub sid: String,
-    pub status: String,
-    pub error_code: Option<String>,
-    pub error_message: Option<String>,
-}
+use serde::Deserialize;
 
 #[derive(Clone)]
 pub struct TwilioService {
     client: Client,
     config: TwilioConfig,
+}
+
+#[derive(Debug, Deserialize)]
+struct VerifyStartResponse {
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VerifyCheckResponse {
+    status: Option<String>,
+    valid: Option<bool>,
 }
 
 impl TwilioService {
@@ -35,64 +28,96 @@ impl TwilioService {
         }
     }
 
-    pub async fn send_verification_code(&self, phone: &str, code: &str) -> AppResult<()> {
+    /// Start a Verify verification via SMS.
+    /// Docs: POST https://verify.twilio.com/v2/Services/{ServiceSid}/Verifications
+    pub async fn start_verification_sms(&self, phone: &str) -> AppResult<()> {
+        if self.config.verify_service_sid.is_empty() {
+            return Err(AppError::InternalError(
+                "Missing TWILIO_VERIFY_SERVICE_SID config".to_string(),
+            ));
+        }
+
         let url = format!(
-            "https://api.twilio.com/2010-04-01/Accounts/{}/Messages.json",
-            self.config.account_sid
+            "https://verify.twilio.com/v2/Services/{}/Verifications",
+            self.config.verify_service_sid
         );
 
-        let body = format!("Your verification code is: {}，valid for 5 minutes.", code);
+        // Twilio Verify expects x-www-form-urlencoded with keys To/Channel
+        let params = [("To", phone), ("Channel", "sms")];
 
-        let params = [
-            ("To", phone),
-            ("From", &self.config.from_phone),
-            ("Body", &body),
-        ];
-
-        let response = self
+        let resp = self
             .client
-            .post(&url)
+            .post(url)
             .basic_auth(&self.config.account_sid, Some(&self.config.auth_token))
             .form(&params)
             .send()
-            .await?;
+            .await
+            .map_err(|e| AppError::ExternalApiError(format!("Twilio request error: {}", e)))?;
 
-        if response.status().is_success() {
-            log::info!("Verification code SMS sent successfully: {}", phone);
-            Ok(())
-        } else {
-            let error_text = response
+        if !resp.status().is_success() {
+            let txt = resp
                 .text()
                 .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            log::error!(
-                "Verification code SMS failed to send: {}, Error: {}",
-                phone,
-                error_text
-            );
-            Err(AppError::ExternalApiError(format!(
-                "SMS sending failed: {}",
-                error_text
-            )))
+                .unwrap_or_else(|_| "Unknown Twilio error".to_string());
+            return Err(AppError::ExternalApiError(format!(
+                "Twilio Verify start failed: {}",
+                txt
+            )));
         }
+
+        // Optionally inspect status (pending)
+        let body: VerifyStartResponse = resp
+            .json()
+            .await
+            .unwrap_or(VerifyStartResponse { status: None });
+        log::info!("Twilio Verify started for {}: {:?}", phone, body.status);
+        Ok(())
     }
-}
 
-// 导出generate_six_digit_code以保持向后兼容
-pub use crate::utils::generate_six_digit_code as generate_verification_code;
+    /// Check a verification code.
+    /// Docs: POST https://verify.twilio.com/v2/Services/{ServiceSid}/VerificationCheck
+    pub async fn check_verification_code(&self, phone: &str, code: &str) -> AppResult<bool> {
+        if self.config.verify_service_sid.is_empty() {
+            return Err(AppError::InternalError(
+                "Missing TWILIO_VERIFY_SERVICE_SID config".to_string(),
+            ));
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        let url = format!(
+            "https://verify.twilio.com/v2/Services/{}/VerificationCheck",
+            self.config.verify_service_sid
+        );
 
-    #[test]
-    fn test_generate_verification_code() {
-        let code = generate_verification_code();
-        assert_eq!(code.len(), 6);
-        assert!(code.chars().all(|c| c.is_ascii_digit()));
+        let params = [("To", phone), ("Code", code)];
 
-        // 确保代码在有效范围内
-        let code_num: u32 = code.parse().unwrap();
-        assert!(code_num >= 100000 && code_num <= 999999);
+        let resp = self
+            .client
+            .post(url)
+            .basic_auth(&self.config.account_sid, Some(&self.config.auth_token))
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalApiError(format!("Twilio request error: {}", e)))?;
+
+        if !resp.status().is_success() {
+            let txt = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown Twilio error".to_string());
+            return Err(AppError::ExternalApiError(format!(
+                "Twilio Verify check failed: {}",
+                txt
+            )));
+        }
+
+        let body: VerifyCheckResponse = resp
+            .json()
+            .await
+            .map_err(|e| AppError::ExternalApiError(format!(
+                "Failed to parse Twilio response: {}",
+                e
+            )))?;
+        let approved = body.status.as_deref() == Some("approved") && body.valid.unwrap_or(false);
+        Ok(approved)
     }
 }

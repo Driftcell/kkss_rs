@@ -3,7 +3,6 @@ use crate::external::*;
 use crate::models::*;
 use crate::services::DiscountCodeService;
 use crate::utils::*;
-use chrono::{Duration, Utc};
 use sqlx::PgPool;
 
 #[derive(Clone)]
@@ -33,46 +32,11 @@ impl AuthService {
         // 验证手机号格式
         validate_us_phone(phone)?;
 
-        // 检查发送频率限制 (60秒内最多1次)
-        let last_code = sqlx::query!(
-            "SELECT created_at FROM verification_codes WHERE phone = $1 ORDER BY created_at DESC LIMIT 1",
-            phone
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        // 依赖 Twilio Verify 自身的速率限制与风控，这里不再读写本地库
+        self.twilio_service.start_verification_sms(phone).await?;
 
-        if let Some(last_code) = last_code {
-            let now = Utc::now();
-            // created_at在SQLite中返回为NaiveDateTime，需要处理Option
-            if let Some(created_at) = last_code.created_at {
-                if now.signed_duration_since(created_at) < Duration::seconds(60) {
-                    return Err(AppError::ValidationError(
-                        "The verification code has been sent too frequently, please try again after 60 seconds.".to_string(),
-                    ));
-                }
-            }
-        }
-
-        // 生成验证码
-        let code = generate_six_digit_code();
-        let expires_at = Utc::now() + Duration::minutes(5);
-
-        // 发送短信
-        self.twilio_service
-            .send_verification_code(phone, &code)
-            .await?;
-
-        // 存储验证码到数据库
-        sqlx::query!(
-            "INSERT INTO verification_codes (phone, code, expires_at) VALUES ($1, $2, $3)",
-            phone,
-            code,
-            expires_at
-        )
-        .execute(&self.pool)
-        .await?;
-
-        Ok(SendCodeResponse { expires_in: 300 })
+        // Twilio Verify 默认验证码有效期 10 分钟
+        Ok(SendCodeResponse { expires_in: 600 })
     }
 
     pub async fn register(&self, request: CreateUserRequest) -> AppResult<AuthResponse> {
@@ -80,9 +44,16 @@ impl AuthService {
         validate_us_phone(&request.phone)?;
         validate_password(&request.password)?;
 
-        // 验证验证码
-        self.verify_code(&request.phone, &request.verification_code)
+        // 验证验证码（通过 Twilio Verify）
+        let approved = self
+            .twilio_service
+            .check_verification_code(&request.phone, &request.verification_code)
             .await?;
+        if !approved {
+            return Err(AppError::ValidationError(
+                "The verification code is incorrect or expired".to_string(),
+            ));
+        }
 
         // 检查手机号是否已注册
         let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = $1", request.phone)
@@ -250,47 +221,7 @@ impl AuthService {
         })
     }
 
-    async fn verify_code(&self, phone: &str, code: &str) -> AppResult<()> {
-        // 查找最新的有效验证码
-        let verification_code = sqlx::query!(
-            "SELECT code, expires_at FROM verification_codes WHERE phone = $1 ORDER BY created_at DESC LIMIT 1",
-            phone
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        if let Some(stored_code) = verification_code {
-            let now = Utc::now();
-            let expires_at = stored_code.expires_at;
-
-            if now > expires_at {
-                return Err(AppError::ValidationError(
-                    "The verification code has expired".to_string(),
-                ));
-            }
-
-            if stored_code.code != code {
-                return Err(AppError::ValidationError(
-                    "The verification code is incorrect".to_string(),
-                ));
-            }
-
-            // 验证成功后删除已使用的验证码
-            sqlx::query!(
-                "DELETE FROM verification_codes WHERE phone = $1 AND code = $2",
-                phone,
-                code
-            )
-            .execute(&self.pool)
-            .await?;
-
-            Ok(())
-        } else {
-            Err(AppError::ValidationError(
-                "The verification code does not exist or has expired".to_string(),
-            ))
-        }
-    }
+    // 本地验证码验证逻辑已移除，改为 Twilio Verify
 
     async fn get_user_by_id(&self, user_id: i64) -> AppResult<User> {
         let user = sqlx::query_as!(
@@ -349,44 +280,5 @@ impl AuthService {
     async fn get_user_with_referrals(&self, user_id: i64) -> AppResult<UserResponse> {
         let user = self.get_user_by_id(user_id).await?;
         self.build_user_response_with_referrals(user).await
-    }
-
-    // 清理过期的验证码
-    pub async fn cleanup_expired_verification_codes(&self) -> AppResult<()> {
-        let now = Utc::now();
-        sqlx::query!("DELETE FROM verification_codes WHERE expires_at < $1", now)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_verification_code_structure() {
-        // 测试验证码数据结构是否正确
-        assert!(true, "Verification code has been moved to database storage");
-    }
-
-    #[test]
-    fn test_verification_code_model_creation() {
-        // 测试VerificationCode模型创建
-        use crate::models::VerificationCode;
-        use chrono::Utc;
-
-        let now = Utc::now();
-        let verification_code = VerificationCode {
-            id: 1,
-            phone: "+1234567890".to_string(),
-            code: "123456".to_string(),
-            created_at: now,
-            expires_at: now + Duration::minutes(5),
-        };
-
-        assert_eq!(verification_code.phone, "+1234567890");
-        assert_eq!(verification_code.code, "123456");
     }
 }

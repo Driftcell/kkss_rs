@@ -15,6 +15,9 @@ refresh_token_expires_in = 2592000  # 30 days
 account_sid = "your-twilio-account-sid"
 auth_token = "your-twilio-auth-token"
 from_phone = "+1234567890"
+# Twilio Verify Service SID (starts with VA...)
+# Create one in Twilio Console Verify Services and set it here or via env TWILIO_VERIFY_SERVICE_SID
+verify_service_sid = "VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 [stripe]
 secret_key = "sk_test_your-stripe-secret-key"

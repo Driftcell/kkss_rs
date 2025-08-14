@@ -35,6 +35,7 @@ pub struct TwilioConfig {
     pub account_sid: String,
     pub auth_token: String,
     pub from_phone: String,
+    pub verify_service_sid: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,6 +102,8 @@ impl Config {
                         account_sid: get_env("TWILIO_ACCOUNT_SID").unwrap_or_default(),
                         auth_token: get_env("TWILIO_AUTH_TOKEN").unwrap_or_default(),
                         from_phone: get_env("TWILIO_FROM_PHONE").unwrap_or_default(),
+                        verify_service_sid: get_env("TWILIO_VERIFY_SERVICE_SID")
+                            .unwrap_or_default(),
                     },
                     stripe: StripeConfig {
                         secret_key: get_env("STRIPE_SECRET_KEY").unwrap_or_default(),
@@ -157,6 +160,9 @@ impl Config {
         }
         if let Ok(v) = env::var("TWILIO_FROM_PHONE") {
             config.twilio.from_phone = v;
+        }
+        if let Ok(v) = env::var("TWILIO_VERIFY_SERVICE_SID") {
+            config.twilio.verify_service_sid = v;
         }
         if let Ok(v) = env::var("STRIPE_SECRET_KEY") {
             config.stripe.secret_key = v;
