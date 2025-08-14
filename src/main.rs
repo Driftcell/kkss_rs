@@ -92,7 +92,7 @@ async fn main() -> std::io::Result<()> {
             use chrono::Utc;
             loop {
                 let now = Utc::now();
-                let start = now - Duration::days(7);
+                let start = now - Duration::days(30);
                 let start_date = start.format("%Y-%m-%d %H:%M:%S").to_string();
                 let end_date = format!("{} 23:59:59", now.format("%Y-%m-%d"));
 

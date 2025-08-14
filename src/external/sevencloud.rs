@@ -141,7 +141,7 @@ impl SevenCloudAPI {
             params.insert("startDate", start_date.to_string());
             params.insert("endDate", end_date.to_string());
             params.insert("current", current_page.to_string());
-            params.insert("size", "100".to_string());
+            params.insert("size", "1000".to_string());
             params.insert("status", "1".to_string());
             params.insert("companyType", "".to_string());
             params.insert("machineType", "".to_string());
@@ -209,7 +209,7 @@ impl SevenCloudAPI {
             let mut data = serde_json::json!({
                 "adminId": self.admin_id.unwrap(),
                 "current": current_page,
-                "size": 20,
+                "size": 1000,
             });
 
             if let Some(is_use) = is_use {
