@@ -277,9 +277,9 @@ impl DiscountCodeService {
     }
 
     /// 通用创建用户优惠码（注册奖励、推荐奖励等）
-    /// 
+    ///
     /// # 参数
-    /// 
+    ///
     /// * `user_id`: 用户id
     /// * `amount`: 美分
     /// * `code_type`: 优惠码类型
