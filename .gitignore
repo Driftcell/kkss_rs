@@ -1,3 +1,10 @@
+# Compiled files
 /target
+
+# Configuration files
 config.toml
-kkss.db*
+.env
+
+# Ignore all markdown files except for README.md
+*.md
+!README.md

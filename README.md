@@ -172,6 +172,7 @@ refresh_token_expires_in = 2592000
 account_sid = "your-twilio-account-sid"
 auth_token = "your-twilio-auth-token"
 from_phone = "+1234567890"
+verify_service_sid = "VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 [stripe]
 secret_key = "sk_test_your-stripe-secret-key"
@@ -203,6 +204,7 @@ base_url = "https://sz.sunzee.com.cn"
   - `TWILIO_ACCOUNT_SID`
   - `TWILIO_AUTH_TOKEN`
   - `TWILIO_FROM_PHONE`
+  - `TWILIO_VERIFY_SERVICE_SID` (Twilio Verify 服务 SID，必需)
 - Stripe：
   - `STRIPE_SECRET_KEY`
   - `STRIPE_WEBHOOK_SECRET`
@@ -231,6 +233,8 @@ cargo run
 - `discount_codes` - 优惠码表
 - `recharge_records` - 充值记录表
 - `sweet_cash_transactions` - 甜品现金交易记录表
+
+说明：验证码发送/校验现已切换到 Twilio Verify，不再存储于本地数据库；原 `verification_codes` 表已在迁移中删除。
 
 ## 使用 Podman 启动 PostgreSQL
 
