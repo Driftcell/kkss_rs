@@ -80,7 +80,7 @@ async fn main() -> std::io::Result<()> {
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
     let membership_service_for_task = membership_service.clone();
 
-    // 启动后台定时同步任务 (每分钟同步最近一周订单与优惠码)
+    // 启动后台定时同步任务 (每分钟同步最近一月订单与优惠码)
     {
         let sync_service_clone = sync_service.clone();
         tokio::spawn(async move {
