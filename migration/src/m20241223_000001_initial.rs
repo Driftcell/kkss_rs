@@ -99,16 +99,41 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Users::MemberCode).string().not_null().unique_key())
-                    .col(ColumnDef::new(Users::Phone).string().not_null().unique_key())
+                    .col(
+                        ColumnDef::new(Users::MemberCode)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(Users::Phone)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(Users::Username).string().not_null())
                     .col(ColumnDef::new(Users::PasswordHash).string().not_null())
                     .col(ColumnDef::new(Users::Birthday).date().not_null())
                     .col(ColumnDef::new(Users::MemberType).string().not_null())
-                    .col(ColumnDef::new(Users::Balance).big_integer().not_null().default(0))
-                    .col(ColumnDef::new(Users::Stamps).big_integer().not_null().default(0))
+                    .col(
+                        ColumnDef::new(Users::Balance)
+                            .big_integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(Users::Stamps)
+                            .big_integer()
+                            .not_null()
+                            .default(0),
+                    )
                     .col(ColumnDef::new(Users::ReferrerId).big_integer().null())
-                    .col(ColumnDef::new(Users::ReferralCode).string().unique_key().null())
+                    .col(
+                        ColumnDef::new(Users::ReferralCode)
+                            .string()
+                            .unique_key()
+                            .null(),
+                    )
                     .col(
                         ColumnDef::new(Users::CreatedAt)
                             .timestamp_with_time_zone()
@@ -157,7 +182,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Orders::ProductNo).string().null())
                     .col(ColumnDef::new(Orders::OrderStatus).integer().not_null())
                     .col(ColumnDef::new(Orders::PayType).integer().null())
-                    .col(ColumnDef::new(Orders::StampsEarned).big_integer().not_null().default(0))
+                    .col(
+                        ColumnDef::new(Orders::StampsEarned)
+                            .big_integer()
+                            .not_null()
+                            .default(0),
+                    )
                     .col(
                         ColumnDef::new(Orders::ExternalCreatedAt)
                             .timestamp_with_time_zone()
@@ -202,14 +232,44 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(DiscountCodes::UserId).big_integer().not_null())
-                    .col(ColumnDef::new(DiscountCodes::Code).string().not_null().unique_key())
-                    .col(ColumnDef::new(DiscountCodes::DiscountAmount).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(DiscountCodes::UserId)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(DiscountCodes::Code)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(DiscountCodes::DiscountAmount)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(DiscountCodes::CodeType).string().not_null())
-                    .col(ColumnDef::new(DiscountCodes::IsUsed).boolean().not_null().default(false))
-                    .col(ColumnDef::new(DiscountCodes::UsedAt).timestamp_with_time_zone().null())
-                    .col(ColumnDef::new(DiscountCodes::ExpiresAt).timestamp_with_time_zone().not_null())
-                    .col(ColumnDef::new(DiscountCodes::ExternalId).big_integer().null())
+                    .col(
+                        ColumnDef::new(DiscountCodes::IsUsed)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(DiscountCodes::UsedAt)
+                            .timestamp_with_time_zone()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(DiscountCodes::ExpiresAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(DiscountCodes::ExternalId)
+                            .big_integer()
+                            .null(),
+                    )
                     .col(
                         ColumnDef::new(DiscountCodes::CreatedAt)
                             .timestamp_with_time_zone()
@@ -249,18 +309,38 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(RechargeRecords::UserId).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(RechargeRecords::UserId)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(RechargeRecords::StripePaymentIntentId)
                             .string()
                             .not_null()
                             .unique_key(),
                     )
-                    .col(ColumnDef::new(RechargeRecords::Amount).big_integer().not_null())
-                    .col(ColumnDef::new(RechargeRecords::BonusAmount).big_integer().not_null())
-                    .col(ColumnDef::new(RechargeRecords::TotalAmount).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(RechargeRecords::Amount)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RechargeRecords::BonusAmount)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RechargeRecords::TotalAmount)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(RechargeRecords::Status).string().not_null())
-                    .col(ColumnDef::new(RechargeRecords::StripeStatus).string().null())
+                    .col(
+                        ColumnDef::new(RechargeRecords::StripeStatus)
+                            .string()
+                            .null(),
+                    )
                     .col(
                         ColumnDef::new(RechargeRecords::CreatedAt)
                             .timestamp_with_time_zone()
@@ -300,13 +380,41 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(SweetCashTransactions::UserId).big_integer().not_null())
-                    .col(ColumnDef::new(SweetCashTransactions::TransactionType).string().not_null())
-                    .col(ColumnDef::new(SweetCashTransactions::Amount).big_integer().not_null())
-                    .col(ColumnDef::new(SweetCashTransactions::BalanceAfter).big_integer().not_null())
-                    .col(ColumnDef::new(SweetCashTransactions::RelatedOrderId).big_integer().null())
-                    .col(ColumnDef::new(SweetCashTransactions::RelatedDiscountCodeId).big_integer().null())
-                    .col(ColumnDef::new(SweetCashTransactions::Description).string().null())
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::UserId)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::TransactionType)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::Amount)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::BalanceAfter)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::RelatedOrderId)
+                            .big_integer()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::RelatedDiscountCodeId)
+                            .big_integer()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(SweetCashTransactions::Description)
+                            .string()
+                            .null(),
+                    )
                     .col(
                         ColumnDef::new(SweetCashTransactions::CreatedAt)
                             .timestamp_with_time_zone()
@@ -481,13 +589,28 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop in reverse order
         manager
-            .drop_table(Table::drop().if_exists().table(SweetCashTransactions::Table).to_owned())
+            .drop_table(
+                Table::drop()
+                    .if_exists()
+                    .table(SweetCashTransactions::Table)
+                    .to_owned(),
+            )
             .await?;
         manager
-            .drop_table(Table::drop().if_exists().table(RechargeRecords::Table).to_owned())
+            .drop_table(
+                Table::drop()
+                    .if_exists()
+                    .table(RechargeRecords::Table)
+                    .to_owned(),
+            )
             .await?;
         manager
-            .drop_table(Table::drop().if_exists().table(DiscountCodes::Table).to_owned())
+            .drop_table(
+                Table::drop()
+                    .if_exists()
+                    .table(DiscountCodes::Table)
+                    .to_owned(),
+            )
             .await?;
         manager
             .drop_table(Table::drop().if_exists().table(Orders::Table).to_owned())

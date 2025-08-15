@@ -1,6 +1,6 @@
-use sea_orm_migration::prelude::*;
-use sea_orm_migration::prelude::extension::postgres::Type;
 use sea_orm::Statement;
+use sea_orm_migration::prelude::extension::postgres::Type;
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveIden)]
 enum DiscountCodes {
@@ -14,7 +14,7 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-    // Create new enum type code_type_new
+        // Create new enum type code_type_new
         manager
             .create_type(
                 Type::create()
@@ -48,7 +48,7 @@ impl MigrationTrait for Migration {
                 WHEN 'redeemed' THEN 'sweets_credits_reward'
                 ELSE 'sweets_credits_reward'
             END"#
-            .to_owned(),
+                .to_owned(),
         );
         manager.get_connection().execute(stmt).await?;
 

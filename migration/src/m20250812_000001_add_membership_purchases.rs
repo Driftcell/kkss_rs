@@ -1,5 +1,5 @@
-use sea_orm_migration::prelude::*;
 use sea_orm_migration::prelude::extension::postgres::Type;
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveIden)]
 enum MembershipPurchases {
@@ -48,7 +48,11 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(MembershipPurchases::UserId).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(MembershipPurchases::UserId)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(MembershipPurchases::StripePaymentIntentId)
                             .string_len(255)
@@ -60,14 +64,22 @@ impl MigrationTrait for Migration {
                             .custom(Alias::new("member_type"))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(MembershipPurchases::Amount).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(MembershipPurchases::Amount)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(MembershipPurchases::Status)
                             .custom(Alias::new("membership_purchase_status"))
                             .not_null()
                             .default("'pending'"),
                     )
-                    .col(ColumnDef::new(MembershipPurchases::StripeStatus).string_len(50).null())
+                    .col(
+                        ColumnDef::new(MembershipPurchases::StripeStatus)
+                            .string_len(50)
+                            .null(),
+                    )
                     .col(
                         ColumnDef::new(MembershipPurchases::CreatedAt)
                             .timestamp_with_time_zone()

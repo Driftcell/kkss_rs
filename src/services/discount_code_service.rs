@@ -249,7 +249,7 @@ impl DiscountCodeService {
             balance_after: Set(current_balance - request.discount_amount),
             related_order_id: Set(None),
             related_discount_code_id: Set(Some(discount_code_id)),
-            description: Set(Some(format!("Redeem balance for discount code {}", code))),
+            description: Set(Some(format!("Redeem balance for discount code {code}"))),
             ..Default::default()
         }
         .insert(&txn)

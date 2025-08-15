@@ -244,8 +244,6 @@ impl RechargeService {
             return Ok(());
         };
 
-        let recharge_record = recharge_record;
-
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
             log::info!("Payment already processed for payment_intent_id: {payment_intent_id}");

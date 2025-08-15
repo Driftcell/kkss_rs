@@ -114,7 +114,7 @@ async fn main() -> std::io::Result<()> {
                 match membership_service_for_task.expire_memberships().await {
                     Ok(n) => {
                         if n > 0 {
-                            log::info!("Expired memberships processed: {}", n);
+                            log::info!("Expired memberships processed: {n}");
                         }
                     }
                     Err(e) => log::error!("Failed to expire memberships: {e:?}"),
