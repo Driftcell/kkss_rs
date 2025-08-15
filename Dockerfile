@@ -19,11 +19,9 @@ RUN mkdir -p src && echo "fn main(){}" > src/main.rs && \
 
 # 2. Copy real source & migrations
 COPY src ./src
-COPY migrations ./migrations
-COPY .sqlx ./.sqlx
+COPY migration ./migration
 
-# 3. Enable offline mode & perform final release build using generated sqlx-data.json
-ENV SQLX_OFFLINE=1
+# 3. perform final release build
 RUN cargo build --release --locked --bin ${APP_NAME}
 
 ## Runtime stage
@@ -36,8 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	ca-certificates libssl3 && \
 	rm -rf /var/lib/apt/lists/*
 
-# Copy binary & sqlx-data.json (kept for reference / future diagnostics)
+# Copy binary
 COPY --from=builder /build/target/release/kkss-backend ./kkss-backend
+COPY --from=builder /build/migration ./migration
 
 # Copy entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
