@@ -128,7 +128,7 @@ impl AuthService {
         let referral_code = generate_unique_referral_code(&self.pool).await?;
 
         // 插入用户
-    let user_id: i64 = sqlx::query_scalar(
+        let user_id: i64 = sqlx::query_scalar(
             r#"
             INSERT INTO users (
         member_code, phone, username, password_hash, birthday,
@@ -309,13 +309,12 @@ impl AuthService {
     ///
     /// 返回用户响应
     async fn build_user_response_with_referrals(&self, user: User) -> AppResult<UserResponse> {
-        let total_referrals: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*)::BIGINT FROM users WHERE referrer_id = $1",
-        )
-        .bind(user.id)
-        .fetch_optional(&self.pool)
-        .await?
-        .unwrap_or(0);
+        let total_referrals: i64 =
+            sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM users WHERE referrer_id = $1")
+                .bind(user.id)
+                .fetch_optional(&self.pool)
+                .await?
+                .unwrap_or(0);
 
         let mut user_response = UserResponse::from(user);
         user_response.total_referrals = total_referrals;

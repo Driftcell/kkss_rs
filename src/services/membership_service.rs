@@ -39,13 +39,11 @@ impl MembershipService {
         req: CreateMembershipIntentRequest,
     ) -> AppResult<CreateMembershipIntentResponse> {
         // 查询当前用户会员类型
-        let current: MemberType = sqlx::query_scalar(
-            "SELECT member_type FROM users WHERE id = $1",
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+        let current: MemberType = sqlx::query_scalar("SELECT member_type FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".into()))?;
 
         // 不允许降级或重复购买同级
         if current == req.target_member_type {
@@ -144,14 +142,12 @@ impl MembershipService {
         let mut rec =
             rec.ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
 
-    if rec.status == MembershipPurchaseStatus::Succeeded {
+        if rec.status == MembershipPurchaseStatus::Succeeded {
             // 已经处理，直接返回用户当前会员类型
-            let mt: MemberType = sqlx::query_scalar(
-                "SELECT member_type FROM users WHERE id = $1",
-            )
-            .bind(user_id)
-            .fetch_one(&mut *tx)
-            .await?;
+            let mt: MemberType = sqlx::query_scalar("SELECT member_type FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_one(&mut *tx)
+                .await?;
             let resp = MembershipPurchaseRecordResponse::from(rec);
             return Ok(ConfirmMembershipResponse {
                 membership_record: resp,
@@ -159,9 +155,9 @@ impl MembershipService {
             });
         }
 
-    // 升级用户会员类型并设置/延长到期时间（默认 1 年）
-    let new_member_type = rec.target_member_type.clone();
-    sqlx::query(
+        // 升级用户会员类型并设置/延长到期时间（默认 1 年）
+        let new_member_type = rec.target_member_type.clone();
+        sqlx::query(
             r#"UPDATE users
                SET member_type = $1,
                    membership_expires_at = COALESCE(
@@ -189,7 +185,7 @@ impl MembershipService {
         .await?;
 
         // 发放福利（使用 DiscountCodeService 以保持统一逻辑 & 外部七云同步）
-    match new_member_type {
+        match new_member_type {
             MemberType::SweetShareholder => {
                 // 1 个 $8 优惠码，有效期 1 个月
                 // 800 cents, code_type: ShareholderReward
@@ -236,7 +232,7 @@ impl MembershipService {
 
         tx.commit().await?;
         rec.status = MembershipPurchaseStatus::Succeeded;
-    let new_type = new_member_type;
+        let new_type = new_member_type;
         let resp = MembershipPurchaseRecordResponse::from(rec);
         Ok(ConfirmMembershipResponse {
             membership_record: resp,
