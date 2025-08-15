@@ -1,4 +1,8 @@
 use sea_orm_migration::prelude::*;
+#[derive(DeriveIden)]
+enum VerificationCodes {
+    Table,
+}
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -6,8 +10,16 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let sql = include_str!("../../migrations/20250814000001_drop_verification_codes_table.sql");
-        manager.get_connection().execute_unprepared(sql).await?;
+        if manager.has_table("verification_codes").await? {
+            manager
+                .drop_table(
+                    Table::drop()
+                        .table(VerificationCodes::Table)
+                        .if_exists()
+                        .to_owned(),
+                )
+                .await?;
+        }
         Ok(())
     }
 
