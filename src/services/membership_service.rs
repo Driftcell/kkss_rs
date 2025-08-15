@@ -183,9 +183,9 @@ impl MembershipService {
         match rec.target_member_type {
             MemberType::SweetShareholder => {
                 // 1 个 $8 优惠码，有效期 1 个月
-                // 800 cents, code_type: PurchaseReward
+                // 800 cents, code_type: ShareholderReward
                 self.discount_code_service
-                    .create_user_discount_code(user_id, 800, CodeType::PurchaseReward, 1)
+                    .create_user_discount_code(user_id, 800, CodeType::ShareholderReward, 1)
                     .await?;
             }
             MemberType::SuperShareholder => {
@@ -194,8 +194,13 @@ impl MembershipService {
                 for _ in 0..10 {
                     let svc = self.discount_code_service.clone();
                     handles.push(tokio::spawn(async move {
-                        svc.create_user_discount_code(user_id, 300, CodeType::PurchaseReward, 1)
-                            .await
+                        svc.create_user_discount_code(
+                            user_id,
+                            300,
+                            CodeType::SuperShareholderReward,
+                            1,
+                        )
+                        .await
                     }));
                 }
                 for h in handles {

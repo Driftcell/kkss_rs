@@ -137,7 +137,7 @@ impl DiscountCodeService {
         }
 
         // 保存优惠码到本地数据库
-        let code_type_enum = CodeType::Redeemed;
+        let code_type_enum = CodeType::SweetsCreditsReward;
         let discount_code_id: i64 = sqlx::query_scalar!(
             r#"
             INSERT INTO discount_codes (
@@ -161,7 +161,7 @@ impl DiscountCodeService {
             id: discount_code_id,
             code,
             discount_amount: request.discount_amount,
-            code_type: CodeType::Redeemed,
+            code_type: CodeType::SweetsCreditsReward,
             is_used: false,
             expires_at,
             created_at: Utc::now(),
@@ -226,7 +226,7 @@ impl DiscountCodeService {
                 .await?;
         }
 
-        let code_type_enum = CodeType::Redeemed; // 与 stamps 兑换一致，标记为 redeemed
+        let code_type_enum = CodeType::SweetsCreditsReward; // 兑换获得，标记为 sweets_credits_reward
         let discount_code_id: i64 = sqlx::query_scalar!(
             r#"
             INSERT INTO discount_codes (
@@ -263,7 +263,7 @@ impl DiscountCodeService {
             id: discount_code_id,
             code,
             discount_amount: request.discount_amount,
-            code_type: CodeType::Redeemed,
+            code_type: CodeType::SweetsCreditsReward,
             is_used: false,
             expires_at,
             created_at: Utc::now(),

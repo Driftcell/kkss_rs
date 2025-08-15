@@ -6,19 +6,17 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, ToSchema)]
 #[sqlx(type_name = "code_type", rename_all = "snake_case")]
 pub enum CodeType {
-    Welcome,
-    Referral,
-    PurchaseReward,
-    Redeemed,
+    ShareholderReward,
+    SuperShareholderReward,
+    SweetsCreditsReward,
 }
 
 impl std::fmt::Display for CodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CodeType::Welcome => write!(f, "welcome"),
-            CodeType::Referral => write!(f, "referral"),
-            CodeType::PurchaseReward => write!(f, "purchase_reward"),
-            CodeType::Redeemed => write!(f, "redeemed"),
+            CodeType::ShareholderReward => write!(f, "shareholder_reward"),
+            CodeType::SuperShareholderReward => write!(f, "super_shareholder_reward"),
+            CodeType::SweetsCreditsReward => write!(f, "sweets_credits_reward"),
         }
     }
 }
@@ -54,7 +52,7 @@ pub struct DiscountCodeQuery {
     pub page: Option<u32>,
     pub per_page: Option<u32>,
     pub status: Option<String>,    // available/used/expired
-    pub code_type: Option<String>, // welcome/referral/purchase_reward/redeemed
+    pub code_type: Option<String>, // shareholder_reward/super_shareholder_reward/sweets_credits_reward
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

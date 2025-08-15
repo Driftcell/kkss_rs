@@ -68,12 +68,7 @@ async fn main() -> std::io::Result<()> {
 
     // 创建服务 (注意顺序: 先创建依赖，再注入)
     let discount_code_service = DiscountCodeService::new(pool.clone(), sevencloud_api.clone());
-    let auth_service = AuthService::new(
-        pool.clone(),
-        jwt_service.clone(),
-        twilio_service,
-        discount_code_service.clone(),
-    );
+    let auth_service = AuthService::new(pool.clone(), jwt_service.clone(), twilio_service);
     let user_service = UserService::new(pool.clone());
     let order_service = OrderService::new(pool.clone());
     let recharge_service = RechargeService::new(pool.clone(), stripe_service.clone());

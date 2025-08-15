@@ -15,7 +15,7 @@ fn get_user_id_from_request(req: &HttpRequest) -> Option<i64> {
         ("page" = Option<u32>, Query, description = "页码"),
         ("per_page" = Option<u32>, Query, description = "每页数量"),
         ("status" = Option<String>, Query, description = "状态: available/used/expired"),
-        ("code_type" = Option<String>, Query, description = "类型: welcome/referral/purchase_reward/redeemed")
+        ("code_type" = Option<String>, Query, description = "类型: shareholder_reward/super_shareholder_reward/sweets_credits_reward")
     ),
     security(
         ("bearer_auth" = [])

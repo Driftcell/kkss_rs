@@ -19,10 +19,9 @@
             "name": "code_type",
             "kind": {
               "Enum": [
-                "welcome",
-                "referral",
-                "purchase_reward",
-                "redeemed"
+                "shareholder_reward",
+                "super_shareholder_reward",
+                "sweets_credits_reward"
               ]
             }
           }

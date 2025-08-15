@@ -1,7 +1,6 @@
 use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
-use crate::services::DiscountCodeService;
 use crate::utils::*;
 use sqlx::PgPool;
 
@@ -10,21 +9,14 @@ pub struct AuthService {
     pool: PgPool,
     jwt_service: JwtService,
     twilio_service: TwilioService,
-    discount_code_service: DiscountCodeService,
 }
 
 impl AuthService {
-    pub fn new(
-        pool: PgPool,
-        jwt_service: JwtService,
-        twilio_service: TwilioService,
-        discount_code_service: DiscountCodeService,
-    ) -> Self {
+    pub fn new(pool: PgPool, jwt_service: JwtService, twilio_service: TwilioService) -> Self {
         Self {
             pool,
             jwt_service,
             twilio_service,
-            discount_code_service,
         }
     }
 
@@ -149,12 +141,6 @@ impl AuthService {
         )
         .fetch_one(&self.pool)
         .await?;
-
-        if let Some(referrer_user_id) = referrer_id {
-            self.discount_code_service
-                .create_user_discount_code(referrer_user_id, 50, CodeType::Referral, 3)
-                .await?;
-        }
 
         // 生成JWT令牌
         let access_token = self
