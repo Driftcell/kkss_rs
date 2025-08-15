@@ -13,8 +13,6 @@ use sea_orm::{
     QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 
-// removed raw-sql IdRow
-
 #[derive(Clone)]
 pub struct DiscountCodeService {
     pool: DatabaseConnection,
