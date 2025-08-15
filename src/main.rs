@@ -78,6 +78,7 @@ async fn main() -> std::io::Result<()> {
         discount_code_service.clone(),
     );
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
+    let membership_service_for_task = membership_service.clone();
 
     // 启动后台定时同步任务 (每分钟同步最近一周订单与优惠码)
     {
@@ -102,6 +103,23 @@ async fn main() -> std::io::Result<()> {
                 }
                 // 间隔 60 秒
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            }
+        });
+    }
+
+    // 启动会员过期检查任务（每 6 小时）
+    {
+        tokio::spawn(async move {
+            loop {
+                match membership_service_for_task.expire_memberships().await {
+                    Ok(n) => {
+                        if n > 0 {
+                            log::info!("Expired memberships processed: {}", n);
+                        }
+                    }
+                    Err(e) => log::error!("Failed to expire memberships: {e:?}"),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
             }
         });
     }

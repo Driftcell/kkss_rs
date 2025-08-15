@@ -66,7 +66,8 @@ impl AuthService {
         }
 
         // 检查手机号是否已注册
-        let existing_user = sqlx::query!("SELECT id FROM users WHERE phone = $1", request.phone)
+        let existing_user = sqlx::query("SELECT id FROM users WHERE phone = $1")
+            .bind(&request.phone)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -84,10 +85,10 @@ impl AuthService {
         let member_code = extract_member_code_from_phone(&request.phone)?;
 
         // 检查会员号是否已存在（防止重复注册）
-        let existing_member =
-            sqlx::query!("SELECT id FROM users WHERE member_code = $1", member_code)
-                .fetch_optional(&self.pool)
-                .await?;
+        let existing_member = sqlx::query("SELECT id FROM users WHERE member_code = $1")
+            .bind(&member_code)
+            .fetch_optional(&self.pool)
+            .await?;
 
         if existing_member.is_some() {
             return Err(AppError::ValidationError(
@@ -98,17 +99,22 @@ impl AuthService {
         // 密码哈希
         let password_hash = hash_password(&request.password)?;
 
-        // 处理推荐人
+        // 处理推荐人，要求推荐人不是 fan
         let (referrer_id, member_type) = if let Some(referrer_code) = &request.referrer_code {
-            let referrer = sqlx::query!(
-                "SELECT id as \"id!: i64\" FROM users WHERE member_code = $1",
-                referrer_code
+            let ref_row = sqlx::query_as::<_, (i64, MemberType)>(
+                "SELECT id, member_type FROM users WHERE member_code = $1",
             )
+            .bind(referrer_code)
             .fetch_optional(&self.pool)
             .await?;
 
-            if let Some(referrer) = referrer {
-                (Some(referrer.id), MemberType::Fan)
+            if let Some((rid, rtype)) = ref_row {
+                if rtype == MemberType::Fan {
+                    return Err(AppError::ValidationError(
+                        "The referrer is not eligible (fan)".to_string(),
+                    ));
+                }
+                (Some(rid), MemberType::Fan)
             } else {
                 return Err(AppError::ValidationError(
                     "The referrer does not exist".to_string(),
@@ -122,23 +128,23 @@ impl AuthService {
         let referral_code = generate_unique_referral_code(&self.pool).await?;
 
         // 插入用户
-        let user_id: i64 = sqlx::query_scalar!(
+    let user_id: i64 = sqlx::query_scalar(
             r#"
             INSERT INTO users (
-                member_code, phone, username, password_hash, birthday,
-                member_type, referrer_id, referral_code
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        member_code, phone, username, password_hash, birthday,
+        member_type, membership_expires_at, referrer_id, referral_code
+        ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8)
             RETURNING id
             "#,
-            member_code,
-            request.phone,
-            request.username,
-            password_hash,
-            birthday,
-            member_type as _,
-            referrer_id,
-            referral_code
         )
+        .bind(&member_code)
+        .bind(&request.phone)
+        .bind(&request.username)
+        .bind(&password_hash)
+        .bind(birthday)
+        .bind(member_type)
+        .bind(referrer_id)
+        .bind(&referral_code)
         .fetch_one(&self.pool)
         .await?;
 
@@ -247,19 +253,18 @@ impl AuthService {
     ///
     /// 返回用户信息
     async fn get_user_by_id(&self, user_id: i64) -> AppResult<User> {
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as::<_, User>(
             r#"
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: MemberType",
+                member_type, membership_expires_at,
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
             WHERE id = $1
             "#,
-            user_id
         )
+        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -276,19 +281,18 @@ impl AuthService {
     ///
     /// 返回用户信息
     async fn get_user_by_phone(&self, phone: &str) -> AppResult<User> {
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as::<_, User>(
             r#"
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
-                member_type as "member_type: MemberType",
+                member_type, membership_expires_at,
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
             WHERE phone = $1
             "#,
-            phone
         )
+        .bind(phone)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -305,11 +309,11 @@ impl AuthService {
     ///
     /// 返回用户响应
     async fn build_user_response_with_referrals(&self, user: User) -> AppResult<UserResponse> {
-        let total_referrals = sqlx::query_scalar!(
-            "SELECT COUNT(*) as count FROM users WHERE referrer_id = $1",
-            user.id
+        let total_referrals: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::BIGINT FROM users WHERE referrer_id = $1",
         )
-        .fetch_one(&self.pool)
+        .bind(user.id)
+        .fetch_optional(&self.pool)
         .await?
         .unwrap_or(0);
 

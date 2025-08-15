@@ -22,6 +22,7 @@ impl UserService {
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
                 member_type,
+                membership_expires_at,
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users
@@ -35,11 +36,13 @@ impl UserService {
         let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         // 获取推荐人数
-        let total_referrals: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE referrer_id = $1")
-                .bind(user_id)
-                .fetch_one(&self.pool)
-                .await?;
+        let total_referrals: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::BIGINT FROM users WHERE referrer_id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(0);
 
         // 获取用户统计信息
         let statistics = self.get_user_statistics(user_id).await?;
@@ -134,10 +137,13 @@ impl UserService {
         let limit = params.get_limit();
 
         // 获取总数
-        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE referrer_id = $1")
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await?;
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::BIGINT FROM users WHERE referrer_id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(0);
 
         // 获取推荐用户列表
         let referrals = sqlx::query_as::<_, User>(
@@ -145,6 +151,7 @@ impl UserService {
             SELECT
                 id, member_code, phone, username, password_hash, birthday,
                 member_type,
+                membership_expires_at,
                 balance, stamps, referrer_id, referral_code,
                 created_at, updated_at
             FROM users

@@ -34,6 +34,7 @@ pub struct User {
     pub password_hash: String,
     pub birthday: NaiveDate,
     pub member_type: MemberType,
+    pub membership_expires_at: Option<DateTime<Utc>>, // 会员到期时间
     pub balance: Option<i64>, // 余额(美分)
     pub stamps: Option<i64>,  // Stamps 数量
     pub referrer_id: Option<i64>,
@@ -83,6 +84,7 @@ pub struct UserResponse {
     pub phone: String,
     pub birthday: String,
     pub member_type: MemberType,
+    pub membership_expires_at: Option<DateTime<Utc>>,
     pub balance: i64,
     pub stamps: i64,
     pub referral_code: Option<String>,
@@ -126,6 +128,7 @@ impl From<User> for UserResponse {
             phone: user.phone,
             birthday: user.birthday.format("%Y-%m-%d").to_string(),
             member_type: user.member_type,
+            membership_expires_at: user.membership_expires_at,
             balance: user.balance.unwrap_or(0),
             stamps: user.stamps.unwrap_or(0),
             referral_code: user.referral_code,

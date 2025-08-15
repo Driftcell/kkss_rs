@@ -39,10 +39,10 @@ impl MembershipService {
         req: CreateMembershipIntentRequest,
     ) -> AppResult<CreateMembershipIntentResponse> {
         // 查询当前用户会员类型
-        let current: MemberType = sqlx::query_scalar!(
-            "SELECT member_type as \"member_type: MemberType\" FROM users WHERE id = $1",
-            user_id
+        let current: MemberType = sqlx::query_scalar(
+            "SELECT member_type FROM users WHERE id = $1",
         )
+        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
@@ -144,12 +144,12 @@ impl MembershipService {
         let mut rec =
             rec.ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
 
-        if rec.status == MembershipPurchaseStatus::Succeeded {
+    if rec.status == MembershipPurchaseStatus::Succeeded {
             // 已经处理，直接返回用户当前会员类型
-            let mt: MemberType = sqlx::query_scalar!(
-                "SELECT member_type as \"member_type: MemberType\" FROM users WHERE id = $1",
-                user_id
+            let mt: MemberType = sqlx::query_scalar(
+                "SELECT member_type FROM users WHERE id = $1",
             )
+            .bind(user_id)
             .fetch_one(&mut *tx)
             .await?;
             let resp = MembershipPurchaseRecordResponse::from(rec);
@@ -159,12 +159,21 @@ impl MembershipService {
             });
         }
 
-        // 升级用户会员类型
-        sqlx::query!(
-            "UPDATE users SET member_type = $1 WHERE id = $2",
-            rec.target_member_type as _,
-            user_id
+    // 升级用户会员类型并设置/延长到期时间（默认 1 年）
+    let new_member_type = rec.target_member_type.clone();
+    sqlx::query(
+            r#"UPDATE users
+               SET member_type = $1,
+                   membership_expires_at = COALESCE(
+                       CASE WHEN membership_expires_at > NOW() THEN membership_expires_at + INTERVAL '1 year'
+                            ELSE NOW() + INTERVAL '1 year' END,
+                       NOW() + INTERVAL '1 year'
+                   ),
+                   updated_at = NOW()
+               WHERE id = $2"#,
         )
+    .bind(new_member_type.clone())
+        .bind(user_id)
         .execute(&mut *tx)
         .await?;
 
@@ -180,7 +189,7 @@ impl MembershipService {
         .await?;
 
         // 发放福利（使用 DiscountCodeService 以保持统一逻辑 & 外部七云同步）
-        match rec.target_member_type {
+    match new_member_type {
             MemberType::SweetShareholder => {
                 // 1 个 $8 优惠码，有效期 1 个月
                 // 800 cents, code_type: ShareholderReward
@@ -227,11 +236,26 @@ impl MembershipService {
 
         tx.commit().await?;
         rec.status = MembershipPurchaseStatus::Succeeded;
-        let new_type = rec.target_member_type.clone();
+    let new_type = new_member_type;
         let resp = MembershipPurchaseRecordResponse::from(rec);
         Ok(ConfirmMembershipResponse {
             membership_record: resp,
             new_member_type: new_type,
         })
+    }
+
+    /// 将已过期的会员降级为 Fan，返回处理的用户数量
+    pub async fn expire_memberships(&self) -> AppResult<i64> {
+        let result = sqlx::query(
+            r#"UPDATE users
+               SET member_type = 'fan'::member_type,
+                   updated_at = NOW()
+             WHERE membership_expires_at IS NOT NULL
+               AND membership_expires_at <= NOW()
+               AND member_type <> 'fan'::member_type"#,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() as i64)
     }
 }
