@@ -1,3 +1,4 @@
+use crate::entities::{recharge_record_entity as rr, user_entity as users};
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
 use crate::models::{
@@ -5,17 +6,21 @@ use crate::models::{
     PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecord, RechargeRecordResponse,
     RechargeStatus,
 };
-use sqlx::PgPool;
+use sea_orm::sea_query::Expr;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    QueryOrder, QuerySelect, Set, TransactionTrait,
+};
 use stripe::PaymentIntentStatus;
 
 #[derive(Clone)]
 pub struct RechargeService {
-    pool: PgPool,
+    pool: DatabaseConnection,
     stripe_service: StripeService,
 }
 
 impl RechargeService {
-    pub fn new(pool: PgPool, stripe_service: StripeService) -> Self {
+    pub fn new(pool: DatabaseConnection, stripe_service: StripeService) -> Self {
         Self {
             pool,
             stripe_service,
@@ -56,21 +61,16 @@ impl RechargeService {
         // 保存充值记录 (直接绑定枚举到 ENUM 列)
         let status = RechargeStatus::Pending;
         let payment_intent_id_str = payment_intent.id.to_string();
-        sqlx::query!(
-            r#"
-            INSERT INTO recharge_records (
-                user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status
-            ) VALUES ($1, $2, $3, $4, $5, $6)
-            "#,
-            user_id,
-            payment_intent_id_str,
-            request.amount,
-            bonus_amount,
-            total_amount,
-            status as _
-        )
-        .execute(&self.pool)
+        let _ = rr::ActiveModel {
+            user_id: Set(user_id),
+            stripe_payment_intent_id: Set(payment_intent_id_str.clone()),
+            amount: Set(request.amount),
+            bonus_amount: Set(bonus_amount),
+            total_amount: Set(total_amount),
+            status: Set(status.to_string()),
+            ..Default::default()
+        }
+        .insert(&self.pool)
         .await?;
 
         Ok(CreatePaymentIntentResponse {
@@ -100,36 +100,24 @@ impl RechargeService {
         }
 
         // 开始事务
-        let mut tx = self.pool.begin().await?;
+        let txn = self.pool.begin().await?;
 
         // 获取充值记录
-        let recharge_record = sqlx::query_as!(
-            RechargeRecord,
-            r#"
-            SELECT
-                id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: _",
-                stripe_status, created_at, updated_at
-            FROM recharge_records
-            WHERE stripe_payment_intent_id = $1 AND user_id = $2
-            "#,
-            request.payment_intent_id,
-            user_id
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        let mut recharge_record = recharge_record
-            .ok_or_else(|| AppError::NotFound("Recharge record not found".to_string()))?;
+        let mut recharge_record = rr::Entity::find()
+            .filter(rr::Column::StripePaymentIntentId.eq(request.payment_intent_id.clone()))
+            .filter(rr::Column::UserId.eq(user_id))
+            .one(&txn)
+            .await?
+            .map(map_recharge)
+            .ok_or_else(|| AppError::NotFound("Recharge record not found".into()))?;
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
-            let current_balance: i64 = sqlx::query_scalar!(
-                r#"SELECT balance as "balance!: i64" FROM users WHERE id = $1"#,
-                user_id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
+            let current_balance = users::Entity::find_by_id(user_id)
+                .one(&txn)
+                .await?
+                .and_then(|u| u.balance)
+                .unwrap_or(0);
 
             return Ok(ConfirmRechargeResponse {
                 recharge_record: RechargeRecordResponse::from(recharge_record),
@@ -140,33 +128,33 @@ impl RechargeService {
         // 更新充值记录状态 (使用枚举)
         let success_status = RechargeStatus::Succeeded;
         let stripe_status_str = format!("{:?}", payment_intent.status);
-        sqlx::query!(
-            r#"UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE id = $3"#,
-            success_status as _,
-            stripe_status_str,
-            recharge_record.id.unwrap()
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(m) = rr::Entity::find_by_id(recharge_record.id.unwrap())
+            .one(&txn)
+            .await?
+        {
+            let mut am = m.into_active_model();
+            am.status = Set(success_status.to_string());
+            am.stripe_status = Set(Some(stripe_status_str));
+            am.update(&txn).await?;
+        }
 
         // 更新用户余额
-        sqlx::query!(
-            r#"UPDATE users SET balance = balance + $1 WHERE id = $2"#,
-            recharge_record.total_amount,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
+            let cur = u.balance.unwrap_or(0);
+            let delta = recharge_record.total_amount.unwrap_or(0);
+            let mut am = u.into_active_model();
+            am.balance = Set(Some(cur + delta));
+            am.update(&txn).await?;
+        }
 
         // 获取新余额
-        let current_balance: i64 = sqlx::query_scalar!(
-            r#"SELECT balance as "balance!: i64" FROM users WHERE id = $1"#,
-            user_id
-        )
-        .fetch_one(&mut *tx)
-        .await?;
+        let current_balance = users::Entity::find_by_id(user_id)
+            .one(&txn)
+            .await?
+            .and_then(|u| u.balance)
+            .unwrap_or(0);
 
-        tx.commit().await?;
+        txn.commit().await?;
 
         recharge_record.status = RechargeStatus::Succeeded;
 
@@ -186,32 +174,29 @@ impl RechargeService {
         let limit = params.get_limit();
 
         // 获取总数
-        let total: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!: i64" FROM recharge_records WHERE user_id = $1"#,
-            user_id
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        #[derive(Debug, sea_orm::FromQueryResult)]
+        struct CountRow {
+            count: i64,
+        }
+        let total = rr::Entity::find()
+            .filter(rr::Column::UserId.eq(user_id))
+            .select_only()
+            .column_as(Expr::val(1).count(), "count")
+            .into_model::<CountRow>()
+            .one(&self.pool)
+            .await?
+            .map(|r| r.count)
+            .unwrap_or(0);
 
         // 获取充值记录列表
-        let records = sqlx::query_as!(
-            RechargeRecord,
-            r#"
-            SELECT
-                id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: _",
-                stripe_status, created_at, updated_at
-            FROM recharge_records
-            WHERE user_id = $1
-            ORDER BY created_at DESC
-            LIMIT $2 OFFSET $3
-            "#,
-            user_id,
-            limit,
-            offset
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let models = rr::Entity::find()
+            .filter(rr::Column::UserId.eq(user_id))
+            .order_by_desc(rr::Column::CreatedAt)
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .all(&self.pool)
+            .await?;
+        let records: Vec<RechargeRecord> = models.into_iter().map(map_recharge).collect();
 
         let items: Vec<RechargeRecordResponse> = records
             .into_iter()
@@ -242,34 +227,24 @@ impl RechargeService {
         user_id: i64,
     ) -> AppResult<()> {
         // 开始事务
-        let mut tx = self.pool.begin().await?;
+        let txn = self.pool.begin().await?;
 
         // 获取充值记录
-        let recharge_record = sqlx::query_as!(
-            RechargeRecord,
-            r#"
-            SELECT
-                id, user_id, stripe_payment_intent_id, amount, bonus_amount,
-                total_amount, status as "status: _",
-                stripe_status, created_at, updated_at
-            FROM recharge_records
-            WHERE stripe_payment_intent_id = $1 AND user_id = $2
-            "#,
-            payment_intent_id,
-            user_id
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        let recharge_record = match recharge_record {
-            Some(record) => record,
-            None => {
-                log::warn!(
-                    "Recharge record not found for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
-                );
-                return Ok(());
-            }
+        let recharge_record = rr::Entity::find()
+            .filter(rr::Column::StripePaymentIntentId.eq(payment_intent_id.to_string()))
+            .filter(rr::Column::UserId.eq(user_id))
+            .one(&txn)
+            .await?;
+        let recharge_record = if let Some(m) = recharge_record {
+            map_recharge(m)
+        } else {
+            log::warn!(
+                "Recharge record not found for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
+            );
+            return Ok(());
         };
+
+        let recharge_record = recharge_record;
 
         // 检查是否已经处理过
         if recharge_record.status == RechargeStatus::Succeeded {
@@ -279,25 +254,26 @@ impl RechargeService {
 
         // 更新充值记录状态
         let success_status = RechargeStatus::Succeeded;
-        sqlx::query!(
-            r#"UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE id = $3"#,
-            success_status as _,
-            "succeeded",
-            recharge_record.id.unwrap()
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(m) = rr::Entity::find_by_id(recharge_record.id.unwrap())
+            .one(&txn)
+            .await?
+        {
+            let mut am = m.into_active_model();
+            am.status = Set(success_status.to_string());
+            am.stripe_status = Set(Some("succeeded".to_string()));
+            am.update(&txn).await?;
+        }
 
         // 更新用户余额
-        sqlx::query!(
-            r#"UPDATE users SET balance = balance + $1 WHERE id = $2"#,
-            recharge_record.total_amount,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
+            let cur = u.balance.unwrap_or(0);
+            let delta = recharge_record.total_amount.unwrap_or(0);
+            let mut am = u.into_active_model();
+            am.balance = Set(Some(cur + delta));
+            am.update(&txn).await?;
+        }
 
-        tx.commit().await?;
+        txn.commit().await?;
 
         log::info!(
             "Successfully processed payment webhook for user {} with amount {}",
@@ -321,17 +297,16 @@ impl RechargeService {
     ) -> AppResult<()> {
         // 更新充值记录状态为失败
         let failed_status = RechargeStatus::Failed;
-        let result = sqlx::query!(
-            r#"UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4"#,
-            failed_status as _,
-            "failed",
-            payment_intent_id,
-            user_id
-        )
-        .execute(&self.pool)
-        .await?;
-
-        if result.rows_affected() > 0 {
+        if let Some(m) = rr::Entity::find()
+            .filter(rr::Column::StripePaymentIntentId.eq(payment_intent_id.to_string()))
+            .filter(rr::Column::UserId.eq(user_id))
+            .one(&self.pool)
+            .await?
+        {
+            let mut am = m.into_active_model();
+            am.status = Set(failed_status.to_string());
+            am.stripe_status = Set(Some("failed".to_string()));
+            am.update(&self.pool).await?;
             log::info!(
                 "Marked payment as failed for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
@@ -357,17 +332,16 @@ impl RechargeService {
     ) -> AppResult<()> {
         // 更新充值记录状态为取消
         let canceled_status = RechargeStatus::Canceled;
-        let result = sqlx::query!(
-            r#"UPDATE recharge_records SET status = $1, stripe_status = $2 WHERE stripe_payment_intent_id = $3 AND user_id = $4"#,
-            canceled_status as _,
-            "canceled",
-            payment_intent_id,
-            user_id
-        )
-        .execute(&self.pool)
-        .await?;
-
-        if result.rows_affected() > 0 {
+        if let Some(m) = rr::Entity::find()
+            .filter(rr::Column::StripePaymentIntentId.eq(payment_intent_id.to_string()))
+            .filter(rr::Column::UserId.eq(user_id))
+            .one(&self.pool)
+            .await?
+        {
+            let mut am = m.into_active_model();
+            am.status = Set(canceled_status.to_string());
+            am.stripe_status = Set(Some("canceled".to_string()));
+            am.update(&self.pool).await?;
             log::info!(
                 "Marked payment as canceled for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
@@ -389,5 +363,26 @@ fn calculate_bonus_amount(amount: i64) -> i64 {
         2000 => 400,   // $20 -> $4
         10000 => 2500, // $100 -> $25
         _ => 0,
+    }
+}
+
+fn map_recharge(m: rr::Model) -> RechargeRecord {
+    RechargeRecord {
+        id: Some(m.id),
+        user_id: Some(m.user_id),
+        stripe_payment_intent_id: m.stripe_payment_intent_id,
+        amount: Some(m.amount),
+        bonus_amount: Some(m.bonus_amount),
+        total_amount: Some(m.total_amount),
+        status: match m.status.as_str() {
+            "pending" => RechargeStatus::Pending,
+            "succeeded" => RechargeStatus::Succeeded,
+            "failed" => RechargeStatus::Failed,
+            "canceled" => RechargeStatus::Canceled,
+            _ => RechargeStatus::Pending,
+        },
+        stripe_status: m.stripe_status,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
     }
 }

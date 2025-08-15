@@ -1,19 +1,27 @@
+use crate::entities::{
+    discount_code_entity as discount_codes, sweet_cash_transaction_entity as sct,
+    user_entity as users,
+};
 use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
 use crate::utils::generate_six_digit_code;
 use chrono::{Duration, Utc};
-use sqlx::PgPool;
+use sea_orm::sea_query::Expr;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    QueryOrder, QuerySelect, Set, TransactionTrait,
+};
 
 #[derive(Clone)]
 pub struct DiscountCodeService {
-    pool: PgPool,
+    pool: DatabaseConnection,
     sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
 }
 
 impl DiscountCodeService {
     pub fn new(
-        pool: PgPool,
+        pool: DatabaseConnection,
         sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
     ) -> Self {
         Self {
@@ -33,33 +41,29 @@ impl DiscountCodeService {
         let limit = params.get_limit();
 
         // 获取总数
-        let total: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!: i64" FROM discount_codes WHERE user_id = $1"#,
-            user_id
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        #[derive(Debug, sea_orm::FromQueryResult)]
+        struct CountRow {
+            count: i64,
+        }
+        let total = discount_codes::Entity::find()
+            .filter(discount_codes::Column::UserId.eq(user_id))
+            .select_only()
+            .column_as(Expr::val(1).count(), "count")
+            .into_model::<CountRow>()
+            .one(&self.pool)
+            .await?
+            .map(|r| r.count)
+            .unwrap_or(0);
 
         // 获取优惠码列表
-        let discount_codes = sqlx::query_as!(
-            DiscountCode,
-            r#"
-            SELECT
-                id, user_id, code, discount_amount,
-                code_type as "code_type: _",
-                is_used, used_at, expires_at, external_id,
-                created_at, updated_at
-            FROM discount_codes
-            WHERE user_id = $1
-            ORDER BY created_at DESC
-            LIMIT $2 OFFSET $3
-            "#,
-            user_id,
-            limit,
-            offset
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let models = discount_codes::Entity::find()
+            .filter(discount_codes::Column::UserId.eq(user_id))
+            .order_by_desc(discount_codes::Column::CreatedAt)
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .all(&self.pool)
+            .await?;
+        let discount_codes: Vec<DiscountCode> = models.into_iter().map(map_discount_code).collect();
 
         let items: Vec<DiscountCodeResponse> = discount_codes
             .into_iter()
@@ -101,28 +105,28 @@ impl DiscountCodeService {
         }
 
         // 开始事务
-        let mut tx = self.pool.begin().await?;
+        let txn = self.pool.begin().await?;
 
         // 检查用户 stamps 余额
-        let user = sqlx::query!(r#"SELECT stamps FROM users WHERE id = $1"#, user_id)
-            .fetch_optional(&mut *tx)
-            .await?;
+        let current_stamps = users::Entity::find_by_id(user_id)
+            .one(&txn)
+            .await?
+            .and_then(|u| u.stamps)
+            .unwrap_or(0);
 
-        let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
-        let current_stamps = user.stamps.unwrap_or(0);
+        // current_stamps computed above
 
         if current_stamps < stamps_needed {
             return Err(AppError::ValidationError("Insufficient stamps".to_string()));
         }
 
         // 扣除 stamps
-        sqlx::query!(
-            r#"UPDATE users SET stamps = stamps - $1 WHERE id = $2"#,
-            stamps_needed,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
+            let new_stamps = u.stamps.unwrap_or(0) - stamps_needed;
+            let mut am = u.into_active_model();
+            am.stamps = Set(Some(new_stamps));
+            am.update(&txn).await?;
+        }
 
         // 生成优惠码
         let code = generate_six_digit_code(); // 生成6位数字码
@@ -138,23 +142,20 @@ impl DiscountCodeService {
 
         // 保存优惠码到本地数据库
         let code_type_enum = CodeType::SweetsCreditsReward;
-        let discount_code_id: i64 = sqlx::query_scalar!(
-            r#"
-            INSERT INTO discount_codes (
-                user_id, code, discount_amount, code_type, expires_at
-            ) VALUES ($1, $2, $3, $4, $5)
-            RETURNING id
-            "#,
-            user_id,
-            code,
-            request.discount_amount,
-            code_type_enum as _,
-            expires_at
-        )
-        .fetch_one(&mut *tx)
+        let created = discount_codes::ActiveModel {
+            user_id: Set(user_id),
+            code: Set(code.clone()),
+            discount_amount: Set(request.discount_amount),
+            code_type: Set(code_type_enum),
+            is_used: Set(Some(false)),
+            expires_at: Set(expires_at),
+            ..Default::default()
+        }
+        .insert(&txn)
         .await?;
+        let discount_code_id = created.id;
 
-        tx.commit().await?;
+        txn.commit().await?;
 
         // 返回结果
         let discount_code = DiscountCodeResponse {
@@ -193,14 +194,15 @@ impl DiscountCodeService {
             ));
         }
 
-        let mut tx = self.pool.begin().await?;
+        let txn = self.pool.begin().await?;
 
         // 查询余额
-        let user = sqlx::query!(r#"SELECT balance FROM users WHERE id = $1"#, user_id)
-            .fetch_optional(&mut *tx)
-            .await?;
-        let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
-        let current_balance = user.balance.unwrap_or(0);
+        let current_balance = users::Entity::find_by_id(user_id)
+            .one(&txn)
+            .await?
+            .and_then(|u| u.balance)
+            .unwrap_or(0);
+        // current_balance computed above
         if current_balance < request.discount_amount {
             return Err(AppError::ValidationError(
                 "Insufficient balance".to_string(),
@@ -208,13 +210,12 @@ impl DiscountCodeService {
         }
 
         // 扣减余额
-        sqlx::query!(
-            r#"UPDATE users SET balance = balance - $1 WHERE id = $2"#,
-            request.discount_amount,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
+            let new_balance = u.balance.unwrap_or(0) - request.discount_amount;
+            let mut am = u.into_active_model();
+            am.balance = Set(Some(new_balance));
+            am.update(&txn).await?;
+        }
 
         // 生成优惠码
         let code = generate_six_digit_code();
@@ -227,37 +228,34 @@ impl DiscountCodeService {
         }
 
         let code_type_enum = CodeType::SweetsCreditsReward; // 兑换获得，标记为 sweets_credits_reward
-        let discount_code_id: i64 = sqlx::query_scalar!(
-            r#"
-            INSERT INTO discount_codes (
-                user_id, code, discount_amount, code_type, expires_at
-            ) VALUES ($1, $2, $3, $4, $5)
-            RETURNING id
-            "#,
-            user_id,
-            code,
-            request.discount_amount,
-            code_type_enum as _,
-            expires_at
-        )
-        .fetch_one(&mut *tx)
+        let created = discount_codes::ActiveModel {
+            user_id: Set(user_id),
+            code: Set(code.clone()),
+            discount_amount: Set(request.discount_amount),
+            code_type: Set(code_type_enum),
+            is_used: Set(Some(false)),
+            expires_at: Set(expires_at),
+            ..Default::default()
+        }
+        .insert(&txn)
         .await?;
+        let discount_code_id = created.id;
 
         // 记录 sweet_cash_transactions (Redeem)
-        sqlx::query!(
-            r#"INSERT INTO sweet_cash_transactions (
-                user_id, transaction_type, amount, balance_after, related_discount_code_id, description
-            ) VALUES ($1, 'redeem', $2, $3, $4, $5)"#,
-            user_id,
-            request.discount_amount,
-            current_balance - request.discount_amount,
-            discount_code_id,
-            format!("Redeem balance for discount code {}", code)
-        )
-        .execute(&mut *tx)
+        sct::ActiveModel {
+            user_id: Set(user_id),
+            transaction_type: Set("redeem".to_string()),
+            amount: Set(request.discount_amount),
+            balance_after: Set(current_balance - request.discount_amount),
+            related_order_id: Set(None),
+            related_discount_code_id: Set(Some(discount_code_id)),
+            description: Set(Some(format!("Redeem balance for discount code {}", code))),
+            ..Default::default()
+        }
+        .insert(&txn)
         .await?;
 
-        tx.commit().await?;
+        txn.commit().await?;
 
         let discount_code = DiscountCodeResponse {
             id: discount_code_id,
@@ -310,12 +308,10 @@ impl DiscountCodeService {
             loop {
                 tries += 1;
                 let candidate = generate_six_digit_code();
-                let exists = sqlx::query_scalar!(
-                    "SELECT 1 as \"exists!: i64\" FROM discount_codes WHERE code = $1",
-                    candidate
-                )
-                .fetch_optional(&self.pool)
-                .await?;
+                let exists = discount_codes::Entity::find()
+                    .filter(discount_codes::Column::Code.eq(candidate.clone()))
+                    .one(&self.pool)
+                    .await?;
                 if exists.is_none() {
                     break candidate;
                 }
@@ -335,18 +331,35 @@ impl DiscountCodeService {
         }
 
         // 插入数据库
-        let id: i64 = sqlx::query_scalar!(
-            r#"INSERT INTO discount_codes (user_id, code, discount_amount, code_type, expires_at)
-                VALUES ($1, $2, $3, $4, $5) RETURNING id"#,
-            user_id,
-            code,
-            amount,
-            code_type as _,
-            expires_at
-        )
-        .fetch_one(&self.pool)
+        let created = discount_codes::ActiveModel {
+            user_id: Set(user_id),
+            code: Set(code),
+            discount_amount: Set(amount),
+            code_type: Set(code_type),
+            is_used: Set(Some(false)),
+            expires_at: Set(expires_at),
+            ..Default::default()
+        }
+        .insert(&self.pool)
         .await?;
+        let id = created.id;
 
         Ok(id)
+    }
+}
+
+fn map_discount_code(m: discount_codes::Model) -> DiscountCode {
+    DiscountCode {
+        id: Some(m.id),
+        user_id: Some(m.user_id),
+        code: m.code,
+        discount_amount: Some(m.discount_amount),
+        code_type: m.code_type,
+        is_used: m.is_used,
+        used_at: m.used_at,
+        expires_at: Some(m.expires_at),
+        external_id: m.external_id,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
     }
 }

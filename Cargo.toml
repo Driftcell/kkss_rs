@@ -10,7 +10,7 @@ env_logger = "0.11.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.47", features = ["full"] }
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "json"] }
+sea-orm = { version = "^0.12.0", features = [ "sqlx-postgres", "runtime-async-std-native-tls", "macros" ] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.18", features = ["v4", "serde"] }
 jsonwebtoken = "9.3"
@@ -29,5 +29,10 @@ utoipa = { version = "4.2", features = ["actix_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { version = "4.0", features = ["actix-web"] }
 async-stripe = { version = "0.41.0", features = ["runtime-tokio-hyper", "checkout", "billing", "connect", "webhook-endpoints"] }
 
-[profile.dev.package.sqlx-macros]
-opt-level = 3
+[dependencies.migration]
+path = "migration"
+
+
+[workspace]
+members = [".", "migration"]
+

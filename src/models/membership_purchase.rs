@@ -1,16 +1,24 @@
 use chrono::{DateTime, Utc};
+use sea_orm::{DeriveActiveEnum, EnumIter, FromQueryResult};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
 
 use crate::models::MemberType;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, ToSchema)]
-#[sqlx(type_name = "membership_purchase_status", rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, DeriveActiveEnum, EnumIter)]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "Enum",
+    enum_name = "membership_purchase_status"
+)]
 pub enum MembershipPurchaseStatus {
+    #[sea_orm(string_value = "pending")]
     Pending,
+    #[sea_orm(string_value = "succeeded")]
     Succeeded,
+    #[sea_orm(string_value = "failed")]
     Failed,
+    #[sea_orm(string_value = "canceled")]
     Canceled,
 }
 
@@ -25,7 +33,7 @@ impl std::fmt::Display for MembershipPurchaseStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult, ToSchema)]
 pub struct MembershipPurchaseRecord {
     pub id: Option<i64>,
     pub user_id: Option<i64>,

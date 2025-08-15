@@ -1,16 +1,18 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use sea_orm::{DeriveActiveEnum, EnumIter, FromQueryResult};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, ToSchema)]
-#[sqlx(type_name = "member_type", rename_all = "snake_case")]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, DeriveActiveEnum, EnumIter,
+)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "member_type")]
 pub enum MemberType {
-    #[serde(rename = "fan")]
+    #[sea_orm(string_value = "fan")]
     Fan,
-    #[serde(rename = "sweet_shareholder")]
+    #[sea_orm(string_value = "sweet_shareholder")]
     SweetShareholder,
-    #[serde(rename = "super_shareholder")]
+    #[sea_orm(string_value = "super_shareholder")]
     SuperShareholder,
 }
 
@@ -24,7 +26,7 @@ impl std::fmt::Display for MemberType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult, ToSchema)]
 pub struct User {
     pub id: i64,
     pub member_code: String,

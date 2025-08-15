@@ -1,16 +1,16 @@
 use crate::error::AppResult;
 use crate::external::*;
-use sqlx::PgPool;
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
 #[derive(Clone)]
 pub struct SyncService {
-    pool: PgPool,
+    pool: DatabaseConnection,
     sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
 }
 
 impl SyncService {
     pub fn new(
-        pool: PgPool,
+        pool: DatabaseConnection,
         sevencloud_api: std::sync::Arc<tokio::sync::Mutex<SevenCloudAPI>>,
     ) -> Self {
         Self {
@@ -41,8 +41,13 @@ impl SyncService {
     /// 处理七云订单
     async fn process_order(&self, order_record: OrderRecord) -> AppResult<()> {
         // 检查订单是否已存在
-        let existing = sqlx::query!("SELECT id FROM orders WHERE id = $1", order_record.id)
-            .fetch_optional(&self.pool)
+        let existing = self
+            .pool
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "SELECT id FROM orders WHERE id = $1",
+                vec![order_record.id.into()],
+            ))
             .await?;
 
         if existing.is_some() {
@@ -51,108 +56,115 @@ impl SyncService {
         }
 
         // 根据会员号查找用户
-        let user = if let Some(member_code) = &order_record.member_code {
-            sqlx::query!(
-                "SELECT id, referrer_id, balance FROM users WHERE member_code = $1",
-                member_code
-            )
-            .fetch_optional(&self.pool)
-            .await?
+        let user_row = if let Some(member_code) = &order_record.member_code {
+            self.pool
+                .query_one(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "SELECT id, referrer_id, balance FROM users WHERE member_code = $1",
+                    vec![member_code.clone().into()],
+                ))
+                .await?
         } else {
             None
         };
 
-        if let Some(user) = user {
+        if let Some(user) = user_row {
+            let user_id_db: i64 = user.try_get_by("id")?;
+            let referrer_id_opt: Option<i64> = user.try_get_by("referrer_id").ok();
             // 开始事务
-            let mut tx = self.pool.begin().await?;
+            let txn = self.pool.begin().await?;
 
             // 插入订单记录
             let created_at = chrono::DateTime::from_timestamp_millis(order_record.create_date)
                 .unwrap_or_default();
             let price_cents: i64 = (order_record.price.unwrap_or(0.0) * 100.0) as i64;
 
-            sqlx::query!(
+            txn.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
                 r#"
                 INSERT INTO orders (
                     id, user_id, member_code, price, product_name, product_no,
                     order_status, pay_type, stamps_earned, external_created_at
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 "#,
-                order_record.id,
-                user.id,
-                order_record.member_code,
-                price_cents,
-                order_record.product_name,
-                order_record.product_no,
-                order_record.status,
-                order_record.pay_type,
-                1,
-                created_at
-            )
-            .execute(&mut *tx)
+                vec![
+                    order_record.id.into(),
+                    user_id_db.into(),
+                    order_record.member_code.clone().into(),
+                    price_cents.into(),
+                    order_record.product_name.clone().into(),
+                    order_record.product_no.clone().into(),
+                    (order_record.status as i64).into(),
+                    order_record.pay_type.unwrap_or_default().into(),
+                    1i64.into(),
+                    created_at.into(),
+                ],
+            ))
             .await?;
 
             // 新订单 +1 个 stamp
-            sqlx::query!(
+            txn.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
                 "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = $1",
-                user.id
-            )
-            .execute(&mut *tx)
+                vec![user_id_db.into()],
+            ))
             .await?;
 
             // 订单返利：若用户存在推荐人，则用户与推荐人各获得订单金额的 10%
             // 只有存在推荐人时才发放双方各 10% 返利
-            if let Some(referrer_id) = user.referrer_id {
+            if let Some(referrer_id) = referrer_id_opt {
                 if price_cents > 0 {
                     let rebate = price_cents / 10; // 向下取整
                     if rebate > 0 {
                         // 下单用户返利
-                        let user_new_balance_row = sqlx::query!(
+                        let user_row = txn.query_one(Statement::from_sql_and_values(
+                            DatabaseBackend::Postgres,
                             "UPDATE users SET balance = COALESCE(balance,0) + $1 WHERE id = $2 RETURNING balance",
-                            rebate,
-                            user.id
-                        )
-                        .fetch_one(&mut *tx)
-                        .await?;
-                        let user_new_balance = user_new_balance_row.balance.unwrap_or(0);
-                        sqlx::query!(
+                            vec![rebate.into(), user_id_db.into()],
+                        )).await?;
+                        let user_new_balance: i64 = user_row
+                            .and_then(|r| r.try_get_by("balance").ok())
+                            .unwrap_or(0);
+                        txn.execute(Statement::from_sql_and_values(
+                            DatabaseBackend::Postgres,
                             r#"INSERT INTO sweet_cash_transactions (
                                 user_id, transaction_type, amount, balance_after, related_order_id, description
                             ) VALUES ($1, 'earn', $2, $3, $4, $5)"#,
-                            user.id,
-                            rebate,
-                            user_new_balance,
-                            order_record.id,
-                            format!("Order rebate 10% for order {}", order_record.id)
-                        )
-                        .execute(&mut *tx)
-                        .await?;
+                            vec![
+                                user_id_db.into(),
+                                rebate.into(),
+                                user_new_balance.into(),
+                                order_record.id.into(),
+                                format!("Order rebate 10% for order {}", order_record.id).into(),
+                            ],
+                        )).await?;
 
                         // 推荐人返利
-                        let referrer_new_balance_row = sqlx::query!(
+                        let ref_row = txn.query_one(Statement::from_sql_and_values(
+                            DatabaseBackend::Postgres,
                             "UPDATE users SET balance = COALESCE(balance,0) + $1 WHERE id = $2 RETURNING balance",
-                            rebate,
-                            referrer_id
-                        )
-                        .fetch_one(&mut *tx)
-                        .await?;
-                        let referrer_new_balance = referrer_new_balance_row.balance.unwrap_or(0);
-                        sqlx::query!(
+                            vec![rebate.into(), referrer_id.into()],
+                        )).await?;
+                        let referrer_new_balance: i64 = ref_row
+                            .and_then(|r| r.try_get_by("balance").ok())
+                            .unwrap_or(0);
+                        txn.execute(Statement::from_sql_and_values(
+                            DatabaseBackend::Postgres,
                             r#"INSERT INTO sweet_cash_transactions (
                                 user_id, transaction_type, amount, balance_after, related_order_id, description
                             ) VALUES ($1, 'earn', $2, $3, $4, $5)"#,
-                            referrer_id,
-                            rebate,
-                            referrer_new_balance,
-                            order_record.id,
-                            format!("Referral order rebate 10% from user {} order {}", user.id, order_record.id)
-                        )
-                        .execute(&mut *tx)
-                        .await?;
+                            vec![
+                                referrer_id.into(),
+                                rebate.into(),
+                                referrer_new_balance.into(),
+                                order_record.id.into(),
+                                format!("Referral order rebate 10% from user {} order {}", user_id_db, order_record.id).into(),
+                            ],
+                        )).await?;
                         log::info!(
                             "Order {} rebate distributed: user {} +{} cents & referrer {} +{} cents",
                             order_record.id,
-                            user.id,
+                            user_id_db,
                             rebate,
                             referrer_id,
                             rebate
@@ -161,12 +173,12 @@ impl SyncService {
                 }
             }
 
-            tx.commit().await?;
+            txn.commit().await?;
 
             log::info!(
-                "Successfully processed order: {}, User: {:?}, Stamps reward: {}",
+                "Successfully processed order: {}, User: {}, Stamps reward: {}",
                 order_record.id,
-                user.id,
+                user_id_db,
                 1
             );
         } else {
@@ -205,12 +217,14 @@ impl SyncService {
         let code_str = coupon_record.code.to_string();
 
         // 查询本地是否存在该优惠码
-        let local = sqlx::query!(
-            r#"SELECT id, is_used FROM discount_codes WHERE code = $1"#,
-            code_str
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let local = self
+            .pool
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r#"SELECT id, is_used FROM discount_codes WHERE code = $1"#,
+                vec![code_str.clone().into()],
+            ))
+            .await?;
 
         if local.is_none() {
             log::debug!(
@@ -220,6 +234,8 @@ impl SyncService {
             return Ok(());
         }
         let local = local.unwrap();
+        let local_id: i64 = local.try_get_by("id")?;
+        let local_is_used: bool = local.try_get_by("is_used").unwrap_or(false);
 
         let external_used = match coupon_record.is_use.as_str() {
             "0" => false,
@@ -235,32 +251,30 @@ impl SyncService {
         };
 
         // 若外部已使用而本地未标记，则更新
-        if external_used && !local.is_used.unwrap_or(false) {
+        if external_used && !local_is_used {
             // 转换 use_date (七云时间戳假定为毫秒)；若不存在则使用当前时间
             let used_at = coupon_record
                 .use_date
                 .and_then(chrono::DateTime::from_timestamp_millis)
                 .unwrap_or_else(chrono::Utc::now);
 
-            sqlx::query!(
+            self.pool.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
                 r#"UPDATE discount_codes SET is_used = TRUE, used_at = $1, updated_at = NOW() WHERE id = $2"#,
-                used_at,
-                local.id
-            )
-            .execute(&self.pool)
-            .await?;
+                vec![used_at.into(), local_id.into()],
+            )).await?;
 
             log::info!(
                 "Discount code marked as used via sync: code={}, id={:?}",
                 coupon_record.code,
-                local.id
+                local_id
             );
-        } else if !external_used && local.is_used.unwrap_or(false) {
+        } else if !external_used && local_is_used {
             // 外部显示未使用但本地已使用——通常不回滚，记录冲突
             log::warn!(
                 "Usage state mismatch (local used, external unused), keeping local: code={}, id={:?}",
                 coupon_record.code,
-                local.id
+                local_id
             );
         } else {
             log::debug!(
