@@ -40,8 +40,6 @@ impl Modify for SecurityAddon {
         handlers::recharge::get_history,
         handlers::recharge::create_membership_payment_intent,
         handlers::recharge::confirm_membership,
-        handlers::admin::sync_orders,
-        handlers::admin::sync_discount_codes,
     ),
     components(
         schemas(
@@ -96,7 +94,6 @@ impl Modify for SecurityAddon {
         (name = "discount", description = "Discount code API"),
         (name = "recharge", description = "Recharge API"),
         (name = "membership", description = "Membership purchase API"),
-        (name = "admin", description = "Admin API"),
     ),
     info(
         title = "KKSS Backend API",

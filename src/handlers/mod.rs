@@ -1,13 +1,10 @@
-pub mod admin;
 pub mod auth;
 pub mod discount_code;
 pub mod order;
 pub mod recharge;
-// membership 使用同一个文件中实现（recharge.rs 内）
 pub mod user;
 pub mod webhook;
 
-pub use admin::admin_config;
 pub use auth::auth_config;
 pub use discount_code::discount_code_config;
 pub use order::order_config;

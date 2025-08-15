@@ -12,7 +12,7 @@ use std::future::{Ready, ready};
 struct PublicPaths {
     exact_paths: Vec<&'static str>,
     prefix_paths: Vec<&'static str>,
-    excluded_paths: Vec<&'static str>, // 需要认证的特殊路径
+    excluded_paths: Vec<&'static str>,
 }
 
 impl PublicPaths {
@@ -25,7 +25,6 @@ impl PublicPaths {
                 "/swagger-ui/",
                 "/api-docs/",
                 "/api/v1/auth/",
-                "/api/v1/admin/", // 添加admin路径为公开访问
                 "/webhook/",
             ],
             // 需要排除的路径（即使在公开前缀下也需要认证）
@@ -144,18 +143,18 @@ where
                     Box::pin(fut)
                 }
                 Err(_) => {
-                    let error = AppError::AuthError("无效的访问令牌".to_string());
+                    let error = AppError::AuthError("Invalid access token".to_string());
                     Box::pin(async move { Err(error.into()) })
                 }
             }
         } else {
-            let error = AppError::AuthError("缺少访问令牌".to_string());
+            let error = AppError::AuthError("Missing access token".to_string());
             Box::pin(async move { Err(error.into()) })
         }
     }
 }
 
-// 用于获取当前用户ID的辅助函数
+/// 用于获取当前用户ID的辅助函数
 pub fn get_current_user_id(req: &ServiceRequest) -> Option<i64> {
     req.extensions().get::<i64>().copied()
 }
