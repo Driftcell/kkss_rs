@@ -1,5 +1,6 @@
 pub mod config;
 pub mod database;
+pub mod entities;
 pub mod error;
 pub mod external;
 pub mod handlers;

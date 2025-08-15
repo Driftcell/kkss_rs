@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
+use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult, ToSchema)]
 pub struct Order {
     pub id: Option<i64>, // 七云订单ID
     pub user_id: Option<i64>,

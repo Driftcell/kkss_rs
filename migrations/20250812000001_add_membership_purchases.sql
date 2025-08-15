@@ -1,5 +1,9 @@
 -- Membership purchases table
-CREATE TYPE membership_purchase_status AS ENUM ('pending', 'succeeded', 'failed', 'canceled');
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'membership_purchase_status') THEN
+        CREATE TYPE membership_purchase_status AS ENUM ('pending', 'succeeded', 'failed', 'canceled');
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS membership_purchases (
     id BIGSERIAL PRIMARY KEY,

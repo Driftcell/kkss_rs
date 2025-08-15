@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
+use sea_orm::{DeriveActiveEnum, EnumIter, FromQueryResult};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "transaction_type", rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveActiveEnum, EnumIter)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "transaction_type")]
 pub enum TransactionType {
-    Earn,   // 赚取
+    #[sea_orm(string_value = "earn")]
+    Earn, // 赚取
+    #[sea_orm(string_value = "redeem")]
     Redeem, // 兑换
 }
 
@@ -18,7 +20,7 @@ impl std::fmt::Display for TransactionType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct SweetCashTransaction {
     pub id: i64,
     pub user_id: i64,

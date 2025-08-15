@@ -1,20 +1,24 @@
+use crate::entities::{membership_purchase_entity as mp, user_entity as users};
 use crate::error::{AppError, AppResult};
 use crate::external::StripeService;
 use crate::models::*;
 use crate::services::DiscountCodeService;
-use sqlx::PgPool;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    Set, TransactionTrait,
+};
 use stripe::PaymentIntentStatus;
 
 #[derive(Clone)]
 pub struct MembershipService {
-    pool: PgPool,
+    pool: DatabaseConnection,
     stripe_service: StripeService,
     discount_code_service: DiscountCodeService,
 }
 
 impl MembershipService {
     pub fn new(
-        pool: PgPool,
+        pool: DatabaseConnection,
         stripe_service: StripeService,
         discount_code_service: DiscountCodeService,
     ) -> Self {
@@ -39,10 +43,10 @@ impl MembershipService {
         req: CreateMembershipIntentRequest,
     ) -> AppResult<CreateMembershipIntentResponse> {
         // 查询当前用户会员类型
-        let current: MemberType = sqlx::query_scalar("SELECT member_type FROM users WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(&self.pool)
+        let current: MemberType = users::Entity::find_by_id(user_id)
+            .one(&self.pool)
             .await?
+            .map(|u| u.member_type)
             .ok_or_else(|| AppError::NotFound("User not found".into()))?;
 
         // 不允许降级或重复购买同级
@@ -90,17 +94,18 @@ impl MembershipService {
 
         let status = MembershipPurchaseStatus::Pending;
         let payment_intent_id = payment_intent.id.to_string();
-        sqlx::query!(
-            r#"INSERT INTO membership_purchases (user_id, stripe_payment_intent_id, target_member_type, amount, status)
-                VALUES ($1,$2,$3,$4,$5) ON CONFLICT(stripe_payment_intent_id) DO NOTHING"#,
-            user_id,
-            payment_intent_id,
-            target_type as _,
-            amount,
-            status as _
-        )
-        .execute(&self.pool)
-        .await?;
+        // upsert-like: try insert, ignore unique conflict
+        let _ = mp::ActiveModel {
+            user_id: Set(user_id),
+            stripe_payment_intent_id: Set(payment_intent_id.clone()),
+            target_member_type: Set(req.target_member_type.to_string()),
+            amount: Set(amount),
+            status: Set(status.to_string()),
+            ..Default::default()
+        }
+        .insert(&self.pool)
+        .await
+        .ok();
 
         Ok(CreateMembershipIntentResponse {
             payment_intent_id,
@@ -124,30 +129,23 @@ impl MembershipService {
             return Err(AppError::ValidationError("Payment not successful".into()));
         }
 
-        let mut tx = self.pool.begin().await?;
+        let txn = self.pool.begin().await?;
         // 读取记录
-        let rec = sqlx::query_as!(
-            MembershipPurchaseRecord,
-            r#"SELECT id, user_id, stripe_payment_intent_id,
-               target_member_type as "target_member_type: MemberType",
-               amount,
-               status as "status: MembershipPurchaseStatus",
-               stripe_status, created_at, updated_at
-               FROM membership_purchases WHERE stripe_payment_intent_id = $1 AND user_id = $2"#,
-            req.payment_intent_id,
-            user_id
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-        let mut rec =
-            rec.ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
+        let rec_m = mp::Entity::find()
+            .filter(mp::Column::StripePaymentIntentId.eq(req.payment_intent_id.clone()))
+            .filter(mp::Column::UserId.eq(user_id))
+            .one(&txn)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
+        let mut rec = map_mp(rec_m.clone());
 
         if rec.status == MembershipPurchaseStatus::Succeeded {
             // 已经处理，直接返回用户当前会员类型
-            let mt: MemberType = sqlx::query_scalar("SELECT member_type FROM users WHERE id = $1")
-                .bind(user_id)
-                .fetch_one(&mut *tx)
-                .await?;
+            let mt = users::Entity::find_by_id(user_id)
+                .one(&txn)
+                .await?
+                .map(|u| u.member_type)
+                .unwrap_or(MemberType::Fan);
             let resp = MembershipPurchaseRecordResponse::from(rec);
             return Ok(ConfirmMembershipResponse {
                 membership_record: resp,
@@ -157,32 +155,26 @@ impl MembershipService {
 
         // 升级用户会员类型并设置/延长到期时间（默认 1 年）
         let new_member_type = rec.target_member_type.clone();
-        sqlx::query(
-            r#"UPDATE users
-               SET member_type = $1,
-                   membership_expires_at = COALESCE(
-                       CASE WHEN membership_expires_at > NOW() THEN membership_expires_at + INTERVAL '1 year'
-                            ELSE NOW() + INTERVAL '1 year' END,
-                       NOW() + INTERVAL '1 year'
-                   ),
-                   updated_at = NOW()
-               WHERE id = $2"#,
-        )
-    .bind(new_member_type.clone())
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
+        if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
+            let current_exp = u.membership_expires_at;
+            let mut am = u.into_active_model();
+            am.member_type = Set(new_member_type.clone());
+            // approximate extension: if expires_at > now then +1 year else now +1 year
+            let now = chrono::Utc::now();
+            let next =
+                current_exp.filter(|&t| t > now).unwrap_or(now) + chrono::Duration::days(365);
+            am.membership_expires_at = Set(Some(next));
+            am.update(&txn).await?;
+        }
 
         // 更新记录状态
         let success = MembershipPurchaseStatus::Succeeded;
-        sqlx::query!(
-            "UPDATE membership_purchases SET status = $1, stripe_status = $2, updated_at = NOW() WHERE id = $3",
-            success as _,
-            format!("{:?}", payment_intent.status),
-            rec.id
-        )
-        .execute(&mut *tx)
-        .await?;
+        if let Some(m) = mp::Entity::find_by_id(rec.id.unwrap()).one(&txn).await? {
+            let mut am = m.into_active_model();
+            am.status = Set(success.to_string());
+            am.stripe_status = Set(Some(format!("{:?}", payment_intent.status)));
+            am.update(&txn).await?;
+        }
 
         // 发放福利（使用 DiscountCodeService 以保持统一逻辑 & 外部七云同步）
         match new_member_type {
@@ -230,7 +222,7 @@ impl MembershipService {
             }
         }
 
-        tx.commit().await?;
+        txn.commit().await?;
         rec.status = MembershipPurchaseStatus::Succeeded;
         let new_type = new_member_type;
         let resp = MembershipPurchaseRecordResponse::from(rec);
@@ -242,16 +234,45 @@ impl MembershipService {
 
     /// 将已过期的会员降级为 Fan，返回处理的用户数量
     pub async fn expire_memberships(&self) -> AppResult<i64> {
-        let result = sqlx::query(
-            r#"UPDATE users
-               SET member_type = 'fan'::member_type,
-                   updated_at = NOW()
-             WHERE membership_expires_at IS NOT NULL
-               AND membership_expires_at <= NOW()
-               AND member_type <> 'fan'::member_type"#,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(result.rows_affected() as i64)
+        // approximate bulk update by scanning and updating; for simplicity
+        let to_downgrade = users::Entity::find()
+            .filter(users::Column::MembershipExpiresAt.lte(chrono::Utc::now()))
+            .filter(users::Column::MembershipExpiresAt.is_not_null())
+            .filter(users::Column::MemberType.ne(MemberType::Fan))
+            .all(&self.pool)
+            .await?;
+        let mut count = 0i64;
+        for u in to_downgrade {
+            let mut am = u.into_active_model();
+            am.member_type = Set(MemberType::Fan);
+            am.update(&self.pool).await?;
+            count += 1;
+        }
+        Ok(count)
+    }
+}
+
+fn map_mp(m: mp::Model) -> MembershipPurchaseRecord {
+    MembershipPurchaseRecord {
+        id: Some(m.id),
+        user_id: Some(m.user_id),
+        stripe_payment_intent_id: m.stripe_payment_intent_id,
+        target_member_type: match m.target_member_type.as_str() {
+            "fan" => MemberType::Fan,
+            "sweet_shareholder" => MemberType::SweetShareholder,
+            "super_shareholder" => MemberType::SuperShareholder,
+            _ => MemberType::Fan,
+        },
+        amount: m.amount,
+        status: match m.status.as_str() {
+            "pending" => MembershipPurchaseStatus::Pending,
+            "succeeded" => MembershipPurchaseStatus::Succeeded,
+            "failed" => MembershipPurchaseStatus::Failed,
+            "canceled" => MembershipPurchaseStatus::Canceled,
+            _ => MembershipPurchaseStatus::Pending,
+        },
+        stripe_status: m.stripe_status,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
     }
 }

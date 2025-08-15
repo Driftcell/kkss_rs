@@ -1,14 +1,16 @@
+use crate::entities::order_entity as orders;
 use crate::error::AppResult;
 use crate::models::*;
-use sqlx::PgPool;
+use sea_orm::sea_query::Expr;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 #[derive(Clone)]
 pub struct OrderService {
-    pool: PgPool,
+    pool: DatabaseConnection,
 }
 
 impl OrderService {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: DatabaseConnection) -> Self {
         Self { pool }
     }
 
@@ -43,30 +45,30 @@ impl OrderService {
 
         let _where_clause = where_conditions.join(" AND ");
 
-        // 获取总数 - 简化查询
-        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM orders WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await?;
+        // 获取总数
+        #[derive(Debug, sea_orm::FromQueryResult)]
+        struct CountRow {
+            count: i64,
+        }
+        let total = orders::Entity::find()
+            .filter(orders::Column::UserId.eq(user_id))
+            .select_only()
+            .column_as(Expr::val(1).count(), "count")
+            .into_model::<CountRow>()
+            .one(&self.pool)
+            .await?
+            .map(|r| r.count)
+            .unwrap_or(0);
 
-        // 获取订单列表 - 简化查询
-        let orders = sqlx::query_as::<_, Order>(
-            r#"
-            SELECT
-                id, user_id, member_code, price, product_name, product_no,
-                order_status, pay_type, stamps_earned,
-                external_created_at, created_at, updated_at
-            FROM orders
-            WHERE user_id = $1
-            ORDER BY external_created_at DESC
-            LIMIT $2 OFFSET $3
-            "#,
-        )
-        .bind(user_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await?;
+        // 获取订单列表
+        let models = orders::Entity::find()
+            .filter(orders::Column::UserId.eq(user_id))
+            .order_by_desc(orders::Column::ExternalCreatedAt)
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .all(&self.pool)
+            .await?;
+        let orders: Vec<Order> = models.into_iter().map(map_order).collect();
 
         let items: Vec<OrderResponse> = orders.into_iter().map(OrderResponse::from).collect();
 
@@ -76,5 +78,22 @@ impl OrderService {
             params.get_limit(),
             total,
         ))
+    }
+}
+
+fn map_order(m: orders::Model) -> Order {
+    Order {
+        id: Some(m.id),
+        user_id: Some(m.user_id),
+        member_code: m.member_code,
+        price: Some(m.price),
+        product_name: m.product_name,
+        product_no: m.product_no,
+        order_status: Some(m.order_status as i64),
+        pay_type: m.pay_type.map(|v| v as i64),
+        stamps_earned: m.stamps_earned,
+        external_created_at: Some(m.external_created_at),
+        created_at: m.created_at,
+        updated_at: m.updated_at,
     }
 }

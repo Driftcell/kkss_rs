@@ -7,7 +7,7 @@ pub type AppResult<T> = Result<T, AppError>;
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] sqlx::Error),
+    DatabaseError(#[from] sea_orm::DbErr),
 
     #[error("Validation error: {0}")]
     ValidationError(String),
@@ -41,9 +41,6 @@ pub enum AppError {
 
     #[error("JSON serialization/deserialization error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
-
-    #[error("Migration error: {0}")]
-    MigrateError(#[from] sqlx::migrate::MigrateError),
 }
 
 impl ResponseError for AppError {
@@ -92,14 +89,6 @@ impl ResponseError for AppError {
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
                     "DATABASE_ERROR",
                     &"Database error".to_string(),
-                )
-            }
-            AppError::MigrateError(err) => {
-                log::error!("Migration error: {err}");
-                (
-                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "MIGRATION_ERROR",
-                    &"Migration error".to_string(),
                 )
             }
             _ => {

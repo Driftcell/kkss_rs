@@ -153,7 +153,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(handlers::order_config)
                     .configure(handlers::discount_code_config)
                     .configure(handlers::recharge_config)
-                    .configure(handlers::membership_config)
+                    .configure(handlers::membership_config),
             )
     })
     .bind((config.server.host.as_str(), config.server.port))?
