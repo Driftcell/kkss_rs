@@ -8,6 +8,7 @@ use utoipa::ToSchema;
     Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, DeriveActiveEnum, EnumIter,
 )]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "code_type")]
+#[serde(rename_all = "snake_case")]
 pub enum CodeType {
     #[sea_orm(string_value = "shareholder_reward")]
     ShareholderReward,

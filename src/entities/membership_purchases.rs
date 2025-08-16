@@ -13,6 +13,7 @@ use utoipa::ToSchema;
     db_type = "Enum",
     enum_name = "membership_purchase_status"
 )]
+#[serde(rename_all = "snake_case")]
 pub enum MembershipPurchaseStatus {
     #[sea_orm(string_value = "pending")]
     Pending,

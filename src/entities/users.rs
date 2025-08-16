@@ -8,6 +8,7 @@ use utoipa::ToSchema;
     Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, DeriveActiveEnum, EnumIter,
 )]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "member_type")]
+#[serde(rename_all = "snake_case")]
 pub enum MemberType {
     #[sea_orm(string_value = "fan")]
     Fan,
