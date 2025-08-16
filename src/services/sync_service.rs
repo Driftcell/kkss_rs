@@ -1,6 +1,14 @@
+use crate::entities::{
+    discount_code_entity as discount_codes, order_entity as orders,
+    sweet_cash_transaction_entity as sct, user_entity as users,
+};
 use crate::error::AppResult;
 use crate::external::*;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use chrono::Utc;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    Set, TransactionTrait,
+};
 
 #[derive(Clone)]
 pub struct SyncService {
@@ -41,36 +49,27 @@ impl SyncService {
     /// 处理七云订单
     async fn process_order(&self, order_record: OrderRecord) -> AppResult<()> {
         // 检查订单是否已存在
-        let existing = self
-            .pool
-            .query_one(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                "SELECT id FROM orders WHERE id = $1",
-                vec![order_record.id.into()],
-            ))
+        let existing = orders::Entity::find_by_id(order_record.id)
+            .one(&self.pool)
             .await?;
-
         if existing.is_some() {
             log::debug!("Order already exists, skipping: {}", order_record.id);
             return Ok(());
         }
 
         // 根据会员号查找用户
-        let user_row = if let Some(member_code) = &order_record.member_code {
-            self.pool
-                .query_one(Statement::from_sql_and_values(
-                    DatabaseBackend::Postgres,
-                    "SELECT id, referrer_id, balance FROM users WHERE member_code = $1",
-                    vec![member_code.clone().into()],
-                ))
+        let user_opt = if let Some(member_code) = &order_record.member_code {
+            users::Entity::find()
+                .filter(users::Column::MemberCode.eq(member_code.clone()))
+                .one(&self.pool)
                 .await?
         } else {
             None
         };
 
-        if let Some(user) = user_row {
-            let user_id_db: i64 = user.try_get_by("id")?;
-            let referrer_id_opt: Option<i64> = user.try_get_by("referrer_id").ok();
+        if let Some(user_model) = user_opt {
+            let user_id_db: i64 = user_model.id;
+            let referrer_id_opt: Option<i64> = user_model.referrer_id;
             // 开始事务
             let txn = self.pool.begin().await?;
 
@@ -79,36 +78,32 @@ impl SyncService {
                 .unwrap_or_default();
             let price_cents: i64 = (order_record.price.unwrap_or(0.0) * 100.0) as i64;
 
-            txn.execute(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                r#"
-                INSERT INTO orders (
-                    id, user_id, member_code, price, product_name, product_no,
-                    order_status, pay_type, stamps_earned, external_created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                "#,
-                vec![
-                    order_record.id.into(),
-                    user_id_db.into(),
-                    order_record.member_code.clone().into(),
-                    price_cents.into(),
-                    order_record.product_name.clone().into(),
-                    order_record.product_no.clone().into(),
-                    (order_record.status as i64).into(),
-                    order_record.pay_type.unwrap_or_default().into(),
-                    1i64.into(),
-                    created_at.into(),
-                ],
-            ))
+            let _inserted_order = orders::ActiveModel {
+                id: Set(order_record.id),
+                user_id: Set(user_id_db),
+                member_code: Set(order_record.member_code.clone()),
+                price: Set(price_cents),
+                product_name: Set(order_record.product_name.clone()),
+                product_no: Set(order_record.product_no.clone()),
+                order_status: Set(order_record.status),
+                pay_type: Set(Some(order_record.pay_type.unwrap_or_default())),
+                stamps_earned: Set(Some(1)),
+                external_created_at: Set(created_at),
+                ..Default::default()
+            }
+            .insert(&txn)
             .await?;
 
             // 新订单 +1 个 stamp
-            txn.execute(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                "UPDATE users SET stamps = COALESCE(stamps, 0) + 1 WHERE id = $1",
-                vec![user_id_db.into()],
-            ))
-            .await?;
+            if let Some(user_model_in_txn) = users::Entity::find_by_id(user_id_db).one(&txn).await?
+            {
+                let new_stamps = user_model_in_txn.stamps.unwrap_or(0) + 1;
+                let mut user_active = user_model_in_txn.into_active_model();
+                user_active.stamps = Set(Some(new_stamps));
+                user_active.update(&txn).await?;
+            } else {
+                log::warn!("User {user_id_db} not found inside txn when updating stamps");
+            }
 
             // 订单返利：若用户存在推荐人，则用户与推荐人各获得订单金额的 10%
             // 只有存在推荐人时才发放双方各 10% 返利
@@ -117,50 +112,63 @@ impl SyncService {
                     let rebate = price_cents / 10; // 向下取整
                     if rebate > 0 {
                         // 下单用户返利
-                        let user_row = txn.query_one(Statement::from_sql_and_values(
-                            DatabaseBackend::Postgres,
-                            "UPDATE users SET balance = COALESCE(balance,0) + $1 WHERE id = $2 RETURNING balance",
-                            vec![rebate.into(), user_id_db.into()],
-                        )).await?;
-                        let user_new_balance: i64 = user_row
-                            .and_then(|r| r.try_get_by("balance").ok())
-                            .unwrap_or(0);
-                        txn.execute(Statement::from_sql_and_values(
-                            DatabaseBackend::Postgres,
-                            r#"INSERT INTO sweet_cash_transactions (
-                                user_id, transaction_type, amount, balance_after, related_order_id, description
-                            ) VALUES ($1, 'earn', $2, $3, $4, $5)"#,
-                            vec![
-                                user_id_db.into(),
-                                rebate.into(),
-                                user_new_balance.into(),
-                                order_record.id.into(),
-                                format!("Order rebate 10% for order {}", order_record.id).into(),
-                            ],
-                        )).await?;
+                        if let Some(user_model_in_txn) =
+                            users::Entity::find_by_id(user_id_db).one(&txn).await?
+                        {
+                            let user_new_balance = user_model_in_txn.balance.unwrap_or(0) + rebate;
+                            let mut user_active = user_model_in_txn.into_active_model();
+                            user_active.balance = Set(Some(user_new_balance));
+                            user_active.update(&txn).await?;
+
+                            sct::ActiveModel {
+                                user_id: Set(user_id_db),
+                                transaction_type: Set(sct::TransactionType::Earn),
+                                amount: Set(rebate),
+                                balance_after: Set(user_new_balance),
+                                related_order_id: Set(Some(order_record.id)),
+                                description: Set(Some(format!(
+                                    "Order rebate 10% for order {}",
+                                    order_record.id
+                                ))),
+                                ..Default::default()
+                            }
+                            .insert(&txn)
+                            .await?;
+                        } else {
+                            log::warn!(
+                                "User {user_id_db} not found inside txn when applying rebate"
+                            );
+                        }
 
                         // 推荐人返利
-                        let ref_row = txn.query_one(Statement::from_sql_and_values(
-                            DatabaseBackend::Postgres,
-                            "UPDATE users SET balance = COALESCE(balance,0) + $1 WHERE id = $2 RETURNING balance",
-                            vec![rebate.into(), referrer_id.into()],
-                        )).await?;
-                        let referrer_new_balance: i64 = ref_row
-                            .and_then(|r| r.try_get_by("balance").ok())
-                            .unwrap_or(0);
-                        txn.execute(Statement::from_sql_and_values(
-                            DatabaseBackend::Postgres,
-                            r#"INSERT INTO sweet_cash_transactions (
-                                user_id, transaction_type, amount, balance_after, related_order_id, description
-                            ) VALUES ($1, 'earn', $2, $3, $4, $5)"#,
-                            vec![
-                                referrer_id.into(),
-                                rebate.into(),
-                                referrer_new_balance.into(),
-                                order_record.id.into(),
-                                format!("Referral order rebate 10% from user {} order {}", user_id_db, order_record.id).into(),
-                            ],
-                        )).await?;
+                        if let Some(ref_model_in_txn) =
+                            users::Entity::find_by_id(referrer_id).one(&txn).await?
+                        {
+                            let referrer_new_balance =
+                                ref_model_in_txn.balance.unwrap_or(0) + rebate;
+                            let mut ref_active = ref_model_in_txn.into_active_model();
+                            ref_active.balance = Set(Some(referrer_new_balance));
+                            ref_active.update(&txn).await?;
+
+                            sct::ActiveModel {
+                                user_id: Set(referrer_id),
+                                transaction_type: Set(sct::TransactionType::Earn),
+                                amount: Set(rebate),
+                                balance_after: Set(referrer_new_balance),
+                                related_order_id: Set(Some(order_record.id)),
+                                description: Set(Some(format!(
+                                    "Referral order rebate 10% from user {} order {}",
+                                    user_id_db, order_record.id
+                                ))),
+                                ..Default::default()
+                            }
+                            .insert(&txn)
+                            .await?;
+                        } else {
+                            log::warn!(
+                                "Referrer {referrer_id} not found inside txn when applying rebate"
+                            );
+                        }
                         log::info!(
                             "Order {} rebate distributed: user {} +{} cents & referrer {} +{} cents",
                             order_record.id,
@@ -217,13 +225,9 @@ impl SyncService {
         let code_str = coupon_record.code.to_string();
 
         // 查询本地是否存在该优惠码
-        let local = self
-            .pool
-            .query_one(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                r#"SELECT id, is_used FROM discount_codes WHERE code = $1"#,
-                vec![code_str.clone().into()],
-            ))
+        let local = discount_codes::Entity::find()
+            .filter(discount_codes::Column::Code.eq(code_str.clone()))
+            .one(&self.pool)
             .await?;
 
         if local.is_none() {
@@ -234,8 +238,8 @@ impl SyncService {
             return Ok(());
         }
         let local = local.unwrap();
-        let local_id: i64 = local.try_get_by("id")?;
-        let local_is_used: bool = local.try_get_by("is_used").unwrap_or(false);
+        let local_id: i64 = local.id;
+        let local_is_used: bool = local.is_used.unwrap_or(false);
 
         let external_used = match coupon_record.is_use.as_str() {
             "0" => false,
@@ -258,11 +262,11 @@ impl SyncService {
                 .and_then(chrono::DateTime::from_timestamp_millis)
                 .unwrap_or_else(chrono::Utc::now);
 
-            self.pool.execute(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                r#"UPDATE discount_codes SET is_used = TRUE, used_at = $1, updated_at = NOW() WHERE id = $2"#,
-                vec![used_at.into(), local_id.into()],
-            )).await?;
+            let mut active = local.into_active_model();
+            active.is_used = Set(Some(true));
+            active.used_at = Set(Some(used_at));
+            active.updated_at = Set(Some(Utc::now()));
+            active.update(&self.pool).await?;
 
             log::info!(
                 "Discount code marked as used via sync: code={}, id={:?}",

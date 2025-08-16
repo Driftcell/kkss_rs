@@ -4,9 +4,9 @@ use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
 use crate::utils::*;
-use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    Set,
 };
 
 #[derive(Clone)]
@@ -294,19 +294,10 @@ impl AuthService {
         &self,
         user: users::Model,
     ) -> AppResult<UserResponse> {
-        #[derive(Debug, sea_orm::FromQueryResult)]
-        struct CountRow {
-            count: i64,
-        }
         let total_referrals = users::Entity::find()
             .filter(users::Column::ReferrerId.eq(user.id))
-            .select_only()
-            .column_as(Expr::val(1).count(), "count")
-            .into_model::<CountRow>()
-            .one(&self.pool)
-            .await?
-            .map(|r| r.count)
-            .unwrap_or(0);
+            .count(&self.pool)
+            .await? as i64;
 
         let mut user_response = UserResponse::from(user);
         user_response.total_referrals = total_referrals;

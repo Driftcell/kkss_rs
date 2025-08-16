@@ -29,7 +29,7 @@ impl From<order_entity::Model> for OrderResponse {
             product_name: m.product_name,
             price: m.price,
             stamps_earned: m.stamps_earned.unwrap_or(0),
-            order_status: m.order_status as i32,
+            order_status: m.order_status,
             external_created_at: m.external_created_at,
         }
     }

@@ -7,10 +7,9 @@ use crate::external::*;
 use crate::models::*;
 use crate::utils::generate_six_digit_code;
 use chrono::{Duration, Utc};
-use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    QueryOrder, QuerySelect, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 
 #[derive(Clone)]
@@ -41,19 +40,10 @@ impl DiscountCodeService {
         let limit = params.get_limit();
 
         // 获取总数
-        #[derive(Debug, sea_orm::FromQueryResult)]
-        struct CountRow {
-            count: i64,
-        }
         let total = discount_codes::Entity::find()
             .filter(discount_codes::Column::UserId.eq(user_id))
-            .select_only()
-            .column_as(Expr::val(1).count(), "count")
-            .into_model::<CountRow>()
-            .one(&self.pool)
-            .await?
-            .map(|r| r.count)
-            .unwrap_or(0);
+            .count(&self.pool)
+            .await? as i64;
 
         // 获取优惠码列表
         let models = discount_codes::Entity::find()

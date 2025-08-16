@@ -5,10 +5,9 @@ use crate::models::{
     ConfirmRechargeRequest, ConfirmRechargeResponse, CreatePaymentIntentResponse,
     PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecordResponse,
 };
-use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    QueryOrder, QuerySelect, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use stripe::PaymentIntentStatus;
 
@@ -107,7 +106,6 @@ impl RechargeService {
             .filter(rr::Column::UserId.eq(user_id))
             .one(&txn)
             .await?
-            .map(|m| m)
             .ok_or_else(|| AppError::NotFound("Recharge record not found".into()))?;
 
         // 检查是否已经处理过
@@ -170,19 +168,10 @@ impl RechargeService {
         let limit = params.get_limit();
 
         // 获取总数
-        #[derive(Debug, sea_orm::FromQueryResult)]
-        struct CountRow {
-            count: i64,
-        }
         let total = rr::Entity::find()
             .filter(rr::Column::UserId.eq(user_id))
-            .select_only()
-            .column_as(Expr::val(1).count(), "count")
-            .into_model::<CountRow>()
-            .one(&self.pool)
-            .await?
-            .map(|r| r.count)
-            .unwrap_or(0);
+            .count(&self.pool)
+            .await? as i64;
 
         // 获取充值记录列表
         let models = rr::Entity::find()

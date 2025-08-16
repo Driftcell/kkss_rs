@@ -5,8 +5,8 @@ use crate::error::{AppError, AppResult};
 use crate::models::*;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 
 #[derive(Clone)]
@@ -28,19 +28,10 @@ impl UserService {
         let user = u.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         // 获取推荐人数
-        #[derive(Debug, sea_orm::FromQueryResult)]
-        struct CountRow {
-            count: i64,
-        }
         let total_referrals = users::Entity::find()
             .filter(users::Column::ReferrerId.eq(user_id))
-            .select_only()
-            .column_as(Expr::val(1).count(), "count")
-            .into_model::<CountRow>()
-            .one(&self.pool)
-            .await?
-            .map(|r| r.count)
-            .unwrap_or(0);
+            .count(&self.pool)
+            .await? as i64;
 
         // 获取用户统计信息
         let statistics = self.get_user_statistics(user_id).await?;
@@ -110,19 +101,10 @@ impl UserService {
         let limit = params.get_limit();
 
         // 获取总数
-        #[derive(Debug, sea_orm::FromQueryResult)]
-        struct CountRow2 {
-            count: i64,
-        }
         let total = users::Entity::find()
             .filter(users::Column::ReferrerId.eq(user_id))
-            .select_only()
-            .column_as(Expr::val(1).count(), "count")
-            .into_model::<CountRow2>()
-            .one(&self.pool)
-            .await?
-            .map(|r| r.count)
-            .unwrap_or(0);
+            .count(&self.pool)
+            .await? as i64;
 
         // 获取推荐用户列表
         let models = users::Entity::find()
@@ -165,21 +147,12 @@ impl UserService {
             .await?;
 
         // 获取可用优惠码数量
-        #[derive(Debug, sea_orm::FromQueryResult)]
-        struct CountRow3 {
-            count: i64,
-        }
         let available_codes = discount_codes::Entity::find()
             .filter(discount_codes::Column::UserId.eq(user_id))
             .filter(discount_codes::Column::IsUsed.eq(false))
             .filter(discount_codes::Column::ExpiresAt.gt(chrono::Utc::now()))
-            .select_only()
-            .column_as(Expr::val(1).count(), "count")
-            .into_model::<CountRow3>()
-            .one(&self.pool)
-            .await?
-            .map(|r| r.count)
-            .unwrap_or(0);
+            .count(&self.pool)
+            .await? as i64;
 
         Ok(UserStatistics {
             total_orders: order_stats_row
