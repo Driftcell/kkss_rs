@@ -68,9 +68,7 @@ impl OrderService {
             .offset(offset as u64)
             .all(&self.pool)
             .await?;
-        let orders: Vec<Order> = models.into_iter().map(map_order).collect();
-
-        let items: Vec<OrderResponse> = orders.into_iter().map(OrderResponse::from).collect();
+        let items: Vec<OrderResponse> = models.into_iter().map(OrderResponse::from).collect();
 
         Ok(PaginatedResponse::new(
             items,
@@ -78,22 +76,5 @@ impl OrderService {
             params.get_limit(),
             total,
         ))
-    }
-}
-
-fn map_order(m: orders::Model) -> Order {
-    Order {
-        id: Some(m.id),
-        user_id: Some(m.user_id),
-        member_code: m.member_code,
-        price: Some(m.price),
-        product_name: m.product_name,
-        product_no: m.product_no,
-        order_status: Some(m.order_status as i64),
-        pay_type: m.pay_type.map(|v| v as i64),
-        stamps_earned: m.stamps_earned,
-        external_created_at: Some(m.external_created_at),
-        created_at: m.created_at,
-        updated_at: m.updated_at,
     }
 }

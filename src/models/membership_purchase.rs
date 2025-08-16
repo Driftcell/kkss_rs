@@ -1,50 +1,7 @@
+use crate::entities::{MemberType, MembershipPurchaseStatus, membership_purchase_entity as mp};
 use chrono::{DateTime, Utc};
-use sea_orm::{DeriveActiveEnum, EnumIter, FromQueryResult};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-use crate::models::MemberType;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, DeriveActiveEnum, EnumIter)]
-#[sea_orm(
-    rs_type = "String",
-    db_type = "Enum",
-    enum_name = "membership_purchase_status"
-)]
-pub enum MembershipPurchaseStatus {
-    #[sea_orm(string_value = "pending")]
-    Pending,
-    #[sea_orm(string_value = "succeeded")]
-    Succeeded,
-    #[sea_orm(string_value = "failed")]
-    Failed,
-    #[sea_orm(string_value = "canceled")]
-    Canceled,
-}
-
-impl std::fmt::Display for MembershipPurchaseStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MembershipPurchaseStatus::Pending => write!(f, "pending"),
-            MembershipPurchaseStatus::Succeeded => write!(f, "succeeded"),
-            MembershipPurchaseStatus::Failed => write!(f, "failed"),
-            MembershipPurchaseStatus::Canceled => write!(f, "canceled"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult, ToSchema)]
-pub struct MembershipPurchaseRecord {
-    pub id: Option<i64>,
-    pub user_id: Option<i64>,
-    pub stripe_payment_intent_id: String,
-    pub target_member_type: MemberType,
-    pub amount: i64,
-    pub status: MembershipPurchaseStatus,
-    pub stripe_status: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateMembershipIntentRequest {
@@ -79,14 +36,14 @@ pub struct MembershipPurchaseRecordResponse {
     pub created_at: DateTime<Utc>,
 }
 
-impl From<MembershipPurchaseRecord> for MembershipPurchaseRecordResponse {
-    fn from(r: MembershipPurchaseRecord) -> Self {
+impl From<mp::Model> for MembershipPurchaseRecordResponse {
+    fn from(m: mp::Model) -> Self {
         Self {
-            id: r.id.unwrap_or(0),
-            amount: r.amount,
-            target_member_type: r.target_member_type,
-            status: r.status,
-            created_at: r.created_at.unwrap_or_else(Utc::now),
+            id: m.id,
+            amount: m.amount,
+            target_member_type: m.target_member_type,
+            status: m.status,
+            created_at: m.created_at.unwrap_or_else(Utc::now),
         }
     }
 }

@@ -6,6 +6,7 @@ use utoipa::{
 };
 use utoipa_swagger_ui::SwaggerUi;
 
+use crate::entities::{CodeType, MemberType, RechargeStatus};
 use crate::handlers;
 use crate::models::*;
 
@@ -43,7 +44,6 @@ impl Modify for SecurityAddon {
     ),
     components(
         schemas(
-            User,
             UserResponse,
             UserStatistics,
             CreateUserRequest,
@@ -53,10 +53,8 @@ impl Modify for SecurityAddon {
             SendCodeRequest,
             SendCodeResponse,
             MemberType,
-            Order,
             OrderResponse,
             OrderQuery,
-            DiscountCode,
             DiscountCodeResponse,
             DiscountCodeQuery,
             RedeemDiscountCodeRequest,
@@ -64,7 +62,6 @@ impl Modify for SecurityAddon {
             RedeemBalanceDiscountCodeRequest,
             RedeemBalanceDiscountCodeResponse,
             CodeType,
-            RechargeRecord,
             RechargeRecordResponse,
             CreatePaymentIntentRequest,
             CreatePaymentIntentResponse,
@@ -72,7 +69,6 @@ impl Modify for SecurityAddon {
             ConfirmRechargeResponse,
             RechargeQuery,
             RechargeStatus,
-            MembershipPurchaseRecord,
             MembershipPurchaseRecordResponse,
             CreateMembershipIntentRequest,
             CreateMembershipIntentResponse,

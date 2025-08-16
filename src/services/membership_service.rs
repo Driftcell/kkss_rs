@@ -1,4 +1,7 @@
-use crate::entities::{membership_purchase_entity as mp, user_entity as users};
+use crate::entities::{
+    CodeType, MemberType, MembershipPurchaseStatus, membership_purchase_entity as mp,
+    user_entity as users,
+};
 use crate::error::{AppError, AppResult};
 use crate::external::StripeService;
 use crate::models::*;
@@ -98,9 +101,9 @@ impl MembershipService {
         let _ = mp::ActiveModel {
             user_id: Set(user_id),
             stripe_payment_intent_id: Set(payment_intent_id.clone()),
-            target_member_type: Set(req.target_member_type.to_string()),
+            target_member_type: Set(req.target_member_type.clone()),
             amount: Set(amount),
-            status: Set(status.to_string()),
+            status: Set(status),
             ..Default::default()
         }
         .insert(&self.pool)
@@ -137,7 +140,7 @@ impl MembershipService {
             .one(&txn)
             .await?
             .ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
-        let mut rec = map_mp(rec_m.clone());
+        let mut rec = rec_m;
 
         if rec.status == MembershipPurchaseStatus::Succeeded {
             // 已经处理，直接返回用户当前会员类型
@@ -169,9 +172,9 @@ impl MembershipService {
 
         // 更新记录状态
         let success = MembershipPurchaseStatus::Succeeded;
-        if let Some(m) = mp::Entity::find_by_id(rec.id.unwrap()).one(&txn).await? {
+        if let Some(m) = mp::Entity::find_by_id(rec.id).one(&txn).await? {
             let mut am = m.into_active_model();
-            am.status = Set(success.to_string());
+            am.status = Set(success);
             am.stripe_status = Set(Some(format!("{:?}", payment_intent.status)));
             am.update(&txn).await?;
         }
@@ -249,30 +252,5 @@ impl MembershipService {
             count += 1;
         }
         Ok(count)
-    }
-}
-
-fn map_mp(m: mp::Model) -> MembershipPurchaseRecord {
-    MembershipPurchaseRecord {
-        id: Some(m.id),
-        user_id: Some(m.user_id),
-        stripe_payment_intent_id: m.stripe_payment_intent_id,
-        target_member_type: match m.target_member_type.as_str() {
-            "fan" => MemberType::Fan,
-            "sweet_shareholder" => MemberType::SweetShareholder,
-            "super_shareholder" => MemberType::SuperShareholder,
-            _ => MemberType::Fan,
-        },
-        amount: m.amount,
-        status: match m.status.as_str() {
-            "pending" => MembershipPurchaseStatus::Pending,
-            "succeeded" => MembershipPurchaseStatus::Succeeded,
-            "failed" => MembershipPurchaseStatus::Failed,
-            "canceled" => MembershipPurchaseStatus::Canceled,
-            _ => MembershipPurchaseStatus::Pending,
-        },
-        stripe_status: m.stripe_status,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
     }
 }

@@ -25,9 +25,7 @@ impl UserService {
         user_id: i64,
     ) -> AppResult<(UserResponse, UserStatistics)> {
         let u = users::Entity::find_by_id(user_id).one(&self.pool).await?;
-        let user = u
-            .map(map_user)
-            .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+        let user = u.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
         // 获取推荐人数
         #[derive(Debug, sea_orm::FromQueryResult)]
@@ -134,9 +132,7 @@ impl UserService {
             .offset(offset as u64)
             .all(&self.pool)
             .await?;
-        let referrals: Vec<User> = models.into_iter().map(map_user).collect();
-
-        let items: Vec<UserResponse> = referrals.into_iter().map(UserResponse::from).collect();
+        let items: Vec<UserResponse> = models.into_iter().map(UserResponse::from).collect();
 
         Ok(PaginatedResponse::new(
             items,
@@ -197,24 +193,5 @@ impl UserService {
                 .unwrap_or(0),
             available_discount_codes: available_codes,
         })
-    }
-}
-
-fn map_user(m: users::Model) -> User {
-    User {
-        id: m.id,
-        member_code: m.member_code,
-        phone: m.phone,
-        username: m.username,
-        password_hash: m.password_hash,
-        birthday: m.birthday,
-        member_type: m.member_type,
-        membership_expires_at: m.membership_expires_at,
-        balance: m.balance,
-        stamps: m.stamps,
-        referrer_id: m.referrer_id,
-        referral_code: m.referral_code,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
     }
 }

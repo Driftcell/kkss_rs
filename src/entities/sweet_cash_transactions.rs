@@ -1,5 +1,25 @@
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
+use sea_orm::{DeriveActiveEnum, EnumIter};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveActiveEnum, EnumIter, PartialEq, Eq)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "transaction_type")]
+pub enum TransactionType {
+    #[sea_orm(string_value = "earn")]
+    Earn,
+    #[sea_orm(string_value = "redeem")]
+    Redeem,
+}
+
+impl std::fmt::Display for TransactionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransactionType::Earn => write!(f, "earn"),
+            TransactionType::Redeem => write!(f, "redeem"),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "sweet_cash_transactions")]
@@ -7,7 +27,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub user_id: i64,
-    pub transaction_type: String,
+    pub transaction_type: TransactionType,
     pub amount: i64,
     pub balance_after: i64,
     pub related_order_id: Option<i64>,

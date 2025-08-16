@@ -1,10 +1,9 @@
-use crate::entities::{recharge_record_entity as rr, user_entity as users};
+use crate::entities::{RechargeStatus, recharge_record_entity as rr, user_entity as users};
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
 use crate::models::{
     ConfirmRechargeRequest, ConfirmRechargeResponse, CreatePaymentIntentResponse,
-    PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecord, RechargeRecordResponse,
-    RechargeStatus,
+    PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecordResponse,
 };
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -67,7 +66,7 @@ impl RechargeService {
             amount: Set(request.amount),
             bonus_amount: Set(bonus_amount),
             total_amount: Set(total_amount),
-            status: Set(status.to_string()),
+            status: Set(status),
             ..Default::default()
         }
         .insert(&self.pool)
@@ -108,7 +107,7 @@ impl RechargeService {
             .filter(rr::Column::UserId.eq(user_id))
             .one(&txn)
             .await?
-            .map(map_recharge)
+            .map(|m| m)
             .ok_or_else(|| AppError::NotFound("Recharge record not found".into()))?;
 
         // 检查是否已经处理过
@@ -128,12 +127,9 @@ impl RechargeService {
         // 更新充值记录状态 (使用枚举)
         let success_status = RechargeStatus::Succeeded;
         let stripe_status_str = format!("{:?}", payment_intent.status);
-        if let Some(m) = rr::Entity::find_by_id(recharge_record.id.unwrap())
-            .one(&txn)
-            .await?
-        {
+        if let Some(m) = rr::Entity::find_by_id(recharge_record.id).one(&txn).await? {
             let mut am = m.into_active_model();
-            am.status = Set(success_status.to_string());
+            am.status = Set(success_status);
             am.stripe_status = Set(Some(stripe_status_str));
             am.update(&txn).await?;
         }
@@ -141,7 +137,7 @@ impl RechargeService {
         // 更新用户余额
         if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
             let cur = u.balance.unwrap_or(0);
-            let delta = recharge_record.total_amount.unwrap_or(0);
+            let delta = recharge_record.total_amount;
             let mut am = u.into_active_model();
             am.balance = Set(Some(cur + delta));
             am.update(&txn).await?;
@@ -196,9 +192,7 @@ impl RechargeService {
             .offset(offset as u64)
             .all(&self.pool)
             .await?;
-        let records: Vec<RechargeRecord> = models.into_iter().map(map_recharge).collect();
-
-        let items: Vec<RechargeRecordResponse> = records
+        let items: Vec<RechargeRecordResponse> = models
             .into_iter()
             .map(RechargeRecordResponse::from)
             .collect();
@@ -236,7 +230,7 @@ impl RechargeService {
             .one(&txn)
             .await?;
         let recharge_record = if let Some(m) = recharge_record {
-            map_recharge(m)
+            m
         } else {
             log::warn!(
                 "Recharge record not found for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
@@ -252,12 +246,9 @@ impl RechargeService {
 
         // 更新充值记录状态
         let success_status = RechargeStatus::Succeeded;
-        if let Some(m) = rr::Entity::find_by_id(recharge_record.id.unwrap())
-            .one(&txn)
-            .await?
-        {
+        if let Some(m) = rr::Entity::find_by_id(recharge_record.id).one(&txn).await? {
             let mut am = m.into_active_model();
-            am.status = Set(success_status.to_string());
+            am.status = Set(success_status);
             am.stripe_status = Set(Some("succeeded".to_string()));
             am.update(&txn).await?;
         }
@@ -265,7 +256,7 @@ impl RechargeService {
         // 更新用户余额
         if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
             let cur = u.balance.unwrap_or(0);
-            let delta = recharge_record.total_amount.unwrap_or(0);
+            let delta = recharge_record.total_amount;
             let mut am = u.into_active_model();
             am.balance = Set(Some(cur + delta));
             am.update(&txn).await?;
@@ -276,7 +267,7 @@ impl RechargeService {
         log::info!(
             "Successfully processed payment webhook for user {} with amount {}",
             user_id,
-            recharge_record.total_amount.unwrap_or(0)
+            recharge_record.total_amount
         );
 
         Ok(())
@@ -302,7 +293,7 @@ impl RechargeService {
             .await?
         {
             let mut am = m.into_active_model();
-            am.status = Set(failed_status.to_string());
+            am.status = Set(failed_status);
             am.stripe_status = Set(Some("failed".to_string()));
             am.update(&self.pool).await?;
             log::info!(
@@ -337,7 +328,7 @@ impl RechargeService {
             .await?
         {
             let mut am = m.into_active_model();
-            am.status = Set(canceled_status.to_string());
+            am.status = Set(canceled_status);
             am.stripe_status = Set(Some("canceled".to_string()));
             am.update(&self.pool).await?;
             log::info!(
@@ -361,26 +352,5 @@ fn calculate_bonus_amount(amount: i64) -> i64 {
         2000 => 400,   // $20 -> $4
         10000 => 2500, // $100 -> $25
         _ => 0,
-    }
-}
-
-fn map_recharge(m: rr::Model) -> RechargeRecord {
-    RechargeRecord {
-        id: Some(m.id),
-        user_id: Some(m.user_id),
-        stripe_payment_intent_id: m.stripe_payment_intent_id,
-        amount: Some(m.amount),
-        bonus_amount: Some(m.bonus_amount),
-        total_amount: Some(m.total_amount),
-        status: match m.status.as_str() {
-            "pending" => RechargeStatus::Pending,
-            "succeeded" => RechargeStatus::Succeeded,
-            "failed" => RechargeStatus::Failed,
-            "canceled" => RechargeStatus::Canceled,
-            _ => RechargeStatus::Pending,
-        },
-        stripe_status: m.stripe_status,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
     }
 }

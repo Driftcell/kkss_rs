@@ -1,5 +1,5 @@
 use crate::entities::{
-    discount_code_entity as discount_codes, sweet_cash_transaction_entity as sct,
+    CodeType, discount_code_entity as discount_codes, sweet_cash_transaction_entity as sct,
     user_entity as users,
 };
 use crate::error::{AppError, AppResult};
@@ -63,12 +63,8 @@ impl DiscountCodeService {
             .offset(offset as u64)
             .all(&self.pool)
             .await?;
-        let discount_codes: Vec<DiscountCode> = models.into_iter().map(map_discount_code).collect();
-
-        let items: Vec<DiscountCodeResponse> = discount_codes
-            .into_iter()
-            .map(DiscountCodeResponse::from)
-            .collect();
+        let items: Vec<DiscountCodeResponse> =
+            models.into_iter().map(DiscountCodeResponse::from).collect();
 
         Ok(PaginatedResponse::new(
             items,
@@ -244,7 +240,7 @@ impl DiscountCodeService {
         // 记录 sweet_cash_transactions (Redeem)
         sct::ActiveModel {
             user_id: Set(user_id),
-            transaction_type: Set("redeem".to_string()),
+            transaction_type: Set(crate::entities::TransactionType::Redeem),
             amount: Set(request.discount_amount),
             balance_after: Set(current_balance - request.discount_amount),
             related_order_id: Set(None),
@@ -345,21 +341,5 @@ impl DiscountCodeService {
         let id = created.id;
 
         Ok(id)
-    }
-}
-
-fn map_discount_code(m: discount_codes::Model) -> DiscountCode {
-    DiscountCode {
-        id: Some(m.id),
-        user_id: Some(m.user_id),
-        code: m.code,
-        discount_amount: Some(m.discount_amount),
-        code_type: m.code_type,
-        is_used: m.is_used,
-        used_at: m.used_at,
-        expires_at: Some(m.expires_at),
-        external_id: m.external_id,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
     }
 }

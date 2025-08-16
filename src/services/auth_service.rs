@@ -1,3 +1,4 @@
+use crate::entities::MemberType;
 use crate::entities::user_entity as users;
 use crate::error::{AppError, AppResult};
 use crate::external::*;
@@ -256,10 +257,10 @@ impl AuthService {
     /// # 返回值
     ///
     /// 返回用户信息
-    async fn get_user_by_id(&self, user_id: i64) -> AppResult<User> {
+    async fn get_user_by_id(&self, user_id: i64) -> AppResult<users::Model> {
         let u = users::Entity::find_by_id(user_id).one(&self.pool).await?;
         let u = u.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
-        Ok(map_user_model(u))
+        Ok(u)
     }
 
     /// 根据手机号获取用户信息
@@ -271,13 +272,13 @@ impl AuthService {
     /// # 返回值
     ///
     /// 返回用户信息
-    async fn get_user_by_phone(&self, phone: &str) -> AppResult<User> {
+    async fn get_user_by_phone(&self, phone: &str) -> AppResult<users::Model> {
         let u = users::Entity::find()
             .filter(users::Column::Phone.eq(phone.to_string()))
             .one(&self.pool)
             .await?;
         let u = u.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
-        Ok(map_user_model(u))
+        Ok(u)
     }
 
     /// 构建用户响应
@@ -289,7 +290,10 @@ impl AuthService {
     /// # 返回值
     ///
     /// 返回用户响应
-    async fn build_user_response_with_referrals(&self, user: User) -> AppResult<UserResponse> {
+    async fn build_user_response_with_referrals(
+        &self,
+        user: users::Model,
+    ) -> AppResult<UserResponse> {
         #[derive(Debug, sea_orm::FromQueryResult)]
         struct CountRow {
             count: i64,
@@ -312,24 +316,5 @@ impl AuthService {
     async fn get_user_with_referrals(&self, user_id: i64) -> AppResult<UserResponse> {
         let user = self.get_user_by_id(user_id).await?;
         self.build_user_response_with_referrals(user).await
-    }
-}
-
-fn map_user_model(m: users::Model) -> User {
-    User {
-        id: m.id,
-        member_code: m.member_code,
-        phone: m.phone,
-        username: m.username,
-        password_hash: m.password_hash,
-        birthday: m.birthday,
-        member_type: m.member_type,
-        membership_expires_at: m.membership_expires_at,
-        balance: m.balance,
-        stamps: m.stamps,
-        referrer_id: m.referrer_id,
-        referral_code: m.referral_code,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
     }
 }
