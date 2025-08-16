@@ -109,11 +109,41 @@ pub async fn get_referrals(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/user/wallet/transactions",
+    tag = "user",
+    params(
+        ("page" = Option<u32>, Query, description = "页码"),
+        ("per_page" = Option<u32>, Query, description = "每页数量")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "获取钱包流水成功"),
+        (status = 401, description = "未授权")
+    )
+)]
+pub async fn get_wallet_transactions(
+    user_service: web::Data<UserService>,
+    req: HttpRequest,
+    query: web::Query<PaginationParams>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+    match user_service
+        .get_user_wallet_transactions(user_id, &query.into_inner())
+        .await
+    {
+        Ok(resp) => Ok(HttpResponse::Ok().json(json!({"success": true, "data": resp}))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
 pub fn user_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/user")
             .route("/profile", web::get().to(get_profile))
             .route("/profile", web::put().to(update_profile))
-            .route("/referrals", web::get().to(get_referrals)),
+            .route("/referrals", web::get().to(get_referrals))
+            .route("/wallet/transactions", web::get().to(get_wallet_transactions)),
     );
 }

@@ -6,6 +6,7 @@ pub mod pagination;
 pub mod recharge_record;
 pub mod sweet_cash_transaction;
 pub mod user;
+pub mod wallet;
 
 pub use common::*;
 pub use discount_code::*;
@@ -15,3 +16,4 @@ pub use pagination::*;
 pub use recharge_record::*;
 pub use sweet_cash_transaction::*;
 pub use user::*;
+pub use wallet::*;

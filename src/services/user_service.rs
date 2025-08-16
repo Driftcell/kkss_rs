@@ -1,5 +1,6 @@
 use crate::entities::{
-    discount_code_entity as discount_codes, order_entity as orders, user_entity as users,
+    RechargeStatus, discount_code_entity as discount_codes, order_entity as orders,
+    recharge_record_entity as rr, sweet_cash_transaction_entity as sct, user_entity as users,
 };
 use crate::error::{AppError, AppResult};
 use crate::models::*;
@@ -173,5 +174,73 @@ impl UserService {
                 .unwrap_or(0),
             available_discount_codes: available_codes,
         })
+    }
+
+    /// 获取用户钱包流水：充值(成功)、生日奖励(Earn)、兑换(Redeem)
+    pub async fn get_user_wallet_transactions(
+        &self,
+        user_id: i64,
+        params: &PaginationParams,
+    ) -> AppResult<PaginatedResponse<WalletTransactionResponse>> {
+        // 充值记录（仅成功）
+        let recharges = rr::Entity::find()
+            .filter(rr::Column::UserId.eq(user_id))
+            .filter(rr::Column::Status.eq(RechargeStatus::Succeeded))
+            .order_by_desc(rr::Column::CreatedAt)
+            .all(&self.pool)
+            .await?;
+
+        // 只取兑换 Redeem（余额兑换优惠码）
+        let redeems = sct::Entity::find()
+            .filter(sct::Column::UserId.eq(user_id))
+            .filter(sct::Column::TransactionType.eq(crate::entities::TransactionType::Redeem))
+            .order_by_desc(sct::Column::CreatedAt)
+            .all(&self.pool)
+            .await?;
+
+        let mut merged: Vec<WalletTransactionResponse> =
+            Vec::with_capacity(recharges.len() + redeems.len());
+
+        for r in recharges {
+            merged.push(WalletTransactionResponse {
+                id: r.id,
+                kind: WalletTransactionKind::Recharge,
+                amount: r.total_amount,
+                balance_after: None,
+                description: Some("Recharge".to_string()),
+                created_at: r.created_at.unwrap_or_else(chrono::Utc::now),
+            });
+        }
+
+        for t in redeems {
+            merged.push(WalletTransactionResponse {
+                id: t.id,
+                kind: WalletTransactionKind::Redeem,
+                amount: t.amount,
+                balance_after: Some(t.balance_after),
+                description: t.description.clone(),
+                created_at: t.created_at.unwrap_or_else(chrono::Utc::now),
+            });
+        }
+
+        // 统一按 created_at desc 排序
+        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+        let total = merged.len() as i64;
+        let offset = params.get_offset() as usize;
+        let limit = params.get_limit() as usize;
+        let slice = if offset >= merged.len() {
+            vec![]
+        } else {
+            let end = std::cmp::min(merged.len(), offset + limit);
+            merged[offset..end].to_vec()
+        };
+
+        Ok(PaginatedResponse::new(
+            slice,
+            params.page.unwrap_or(1),
+            params.page_size.unwrap_or(20),
+            total,
+        ))
     }
 }
