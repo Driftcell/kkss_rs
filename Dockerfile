@@ -1,27 +1,31 @@
-#### Multi-stage build for kkss-backend (Actix-web + SQLite)
-## Build stage
-FROM rust:1.88 AS builder
+#### Multi-stage build for kkss-backend using cargo-chef (workspace: root + migration)
 
+# 0) Base chef image with cargo-chef available
+FROM rust:1.88 AS chef
+WORKDIR /build
+RUN cargo install cargo-chef
+
+# 1) Planner stage: generate recipe capturing workspace dependency graph
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# 2) Builder stage: install system deps, cook dependencies from recipe, then build
+FROM chef AS builder
 ARG APP_NAME=kkss-backend
 WORKDIR /build
 
-## Install system build dependencies (OpenSSL headers, pkg-config, build tools)
+# Install system build dependencies (OpenSSL headers, pkg-config, build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	pkg-config libssl-dev ca-certificates build-essential && \
 	rm -rf /var/lib/apt/lists/*
 
-# 1. Pre-copy manifests for dependency caching
-COPY Cargo.toml Cargo.lock ./
+# Cook cached dependencies for the entire workspace (root crate + migration)
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# Create a stub src to prime dependency cache
-RUN mkdir -p src && echo "fn main(){}" > src/main.rs && \
-	cargo fetch && cargo build --release || true
-
-# 2. Copy real source & migrations
-COPY src ./src
-COPY migration ./migration
-
-# 3. perform final release build
+# Build the actual application (this layer rebuilds only when source changes)
+COPY . .
 RUN cargo build --release --locked --bin ${APP_NAME}
 
 ## Runtime stage
