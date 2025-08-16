@@ -130,8 +130,9 @@ impl UserService {
         #[derive(Debug, sea_orm::FromQueryResult)]
         struct OrderStatsRow {
             total_orders: i64,
-            total_spent: i64,
-            total_earned_stamps: i64,
+            // SUM 在无记录时会返回 NULL，这里使用 Option 以避免解码错误
+            total_spent: Option<i64>,
+            total_earned_stamps: Option<i64>,
         }
         let order_stats_row: Option<OrderStatsRow> = orders::Entity::find()
             .filter(orders::Column::UserId.eq(user_id))
@@ -159,10 +160,13 @@ impl UserService {
                 .as_ref()
                 .map(|r| r.total_orders)
                 .unwrap_or(0),
-            total_spent: order_stats_row.as_ref().map(|r| r.total_spent).unwrap_or(0),
+            total_spent: order_stats_row
+                .as_ref()
+                .and_then(|r| r.total_spent)
+                .unwrap_or(0),
             total_earned_stamps: order_stats_row
                 .as_ref()
-                .map(|r| r.total_earned_stamps)
+                .and_then(|r| r.total_earned_stamps)
                 .unwrap_or(0),
             available_discount_codes: available_codes,
         })
