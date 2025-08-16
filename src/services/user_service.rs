@@ -83,6 +83,9 @@ impl UserService {
         }
         if let Some(b) = &birthday {
             model.birthday = Set(*b);
+            use chrono::Datelike;
+            model.birthday_month = Set(b.month() as i16);
+            model.birthday_day = Set(b.day() as i16);
         }
         let _updated = model.update(&self.pool).await?;
 

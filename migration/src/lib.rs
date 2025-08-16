@@ -7,6 +7,8 @@ mod m20250814_000001_drop_verification_codes_table;
 mod m20250815_000001_update_discount_code_types;
 mod m20250815_000002_add_membership_expires_at;
 mod m20250816_000001_add_free_topping_code_type;
+mod m20250816_000002_add_birthday_rewards;
+mod m20250816_000003_add_birthday_mm_dd;
 
 pub struct Migrator;
 
@@ -21,6 +23,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250815_000001_update_discount_code_types::Migration),
             Box::new(m20250815_000002_add_membership_expires_at::Migration),
             Box::new(m20250816_000001_add_free_topping_code_type::Migration),
+            Box::new(m20250816_000002_add_birthday_rewards::Migration),
+            Box::new(m20250816_000003_add_birthday_mm_dd::Migration),
         ]
     }
 }

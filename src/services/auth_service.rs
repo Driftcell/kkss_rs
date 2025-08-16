@@ -5,6 +5,7 @@ use crate::external::*;
 use crate::models::*;
 use crate::services::DiscountCodeService;
 use crate::utils::*;
+use chrono::Datelike;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
     Set,
@@ -89,9 +90,11 @@ impl AuthService {
             ));
         }
 
-        // 解析生日
-        let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
+    // 解析生日
+    let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
             .map_err(|_| AppError::ValidationError("Invalid birthday format".to_string()))?;
+    let bmm: i16 = birthday.month() as i16;
+    let bdd: i16 = birthday.day() as i16;
 
         // 从手机号生成会员号（去掉+1前缀的十位数字）
         let member_code = extract_member_code_from_phone(&request.phone)?;
@@ -146,6 +149,8 @@ impl AuthService {
             username: Set(request.username.clone()),
             password_hash: Set(password_hash),
             birthday: Set(birthday),
+            birthday_month: Set(bmm),
+            birthday_day: Set(bdd),
             member_type: Set(member_type),
             membership_expires_at: sea_orm::ActiveValue::NotSet,
             balance: sea_orm::ActiveValue::NotSet,

@@ -38,6 +38,8 @@ pub struct Model {
     pub username: String,
     pub password_hash: String,
     pub birthday: NaiveDate,
+    pub birthday_month: i16,
+    pub birthday_day: i16,
     pub member_type: MemberType,
     pub membership_expires_at: Option<DateTime<Utc>>,
     pub balance: Option<i64>,

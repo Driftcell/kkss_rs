@@ -84,6 +84,8 @@ async fn main() -> std::io::Result<()> {
     );
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
     let membership_service_for_task = membership_service.clone();
+    let birthday_reward_service = BirthdayRewardService::new(pool.clone());
+    let birthday_reward_service_for_task = birthday_reward_service.clone();
 
     // 启动后台定时同步任务 (每分钟同步最近一月订单与优惠码)
     {
@@ -129,6 +131,20 @@ async fn main() -> std::io::Result<()> {
         });
     }
 
+    // 启动生日福利发放任务（每小时运行一次，幂等保障一年一次）
+    {
+        tokio::spawn(async move {
+            loop {
+                match birthday_reward_service_for_task.grant_today_birthdays().await {
+                    Ok(n) => if n > 0 { log::info!("Birthday rewards granted: {n}"); },
+                    Err(e) => log::error!("Failed to grant birthday rewards: {e:?}"),
+                }
+                // 每小时执行一次
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            }
+        });
+    }
+
     // 启动HTTP服务器
     log::info!(
         "Starting HTTP server at {}:{}",
@@ -147,6 +163,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(discount_code_service.clone()))
             .app_data(web::Data::new(recharge_service.clone()))
             .app_data(web::Data::new(membership_service.clone()))
+            .app_data(web::Data::new(birthday_reward_service.clone()))
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(sync_service.clone()))
             .configure(swagger_config)
