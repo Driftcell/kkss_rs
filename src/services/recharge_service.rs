@@ -1,4 +1,7 @@
-use crate::entities::{RechargeStatus, recharge_record_entity as rr, user_entity as users};
+use crate::entities::{
+    RechargeStatus, TransactionType, recharge_record_entity as rr,
+    sweet_cash_transaction_entity as sct, user_entity as users,
+};
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
 use crate::models::{
@@ -148,6 +151,23 @@ impl RechargeService {
             .and_then(|u| u.balance)
             .unwrap_or(0);
 
+        // 记录 sweet_cash_transactions (Earn)
+        sct::ActiveModel {
+            user_id: Set(user_id),
+            transaction_type: Set(TransactionType::Earn),
+            amount: Set(recharge_record.total_amount),
+            balance_after: Set(current_balance),
+            related_order_id: Set(None),
+            related_discount_code_id: Set(None),
+            description: Set(Some(format!(
+                "Recharge confirmed via Stripe {}",
+                request.payment_intent_id
+            ))),
+            ..Default::default()
+        }
+        .insert(&txn)
+        .await?;
+
         txn.commit().await?;
 
         recharge_record.status = RechargeStatus::Succeeded;
@@ -243,12 +263,33 @@ impl RechargeService {
         }
 
         // 更新用户余额
+        let mut new_balance_after: Option<i64> = None;
         if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
             let cur = u.balance.unwrap_or(0);
             let delta = recharge_record.total_amount;
             let mut am = u.into_active_model();
-            am.balance = Set(Some(cur + delta));
+            let updated = cur + delta;
+            am.balance = Set(Some(updated));
             am.update(&txn).await?;
+            new_balance_after = Some(updated);
+        }
+
+        // 记录 sweet_cash_transactions (Earn)
+        if let Some(balance_after) = new_balance_after {
+            sct::ActiveModel {
+                user_id: Set(user_id),
+                transaction_type: Set(TransactionType::Earn),
+                amount: Set(recharge_record.total_amount),
+                balance_after: Set(balance_after),
+                related_order_id: Set(None),
+                related_discount_code_id: Set(None),
+                description: Set(Some(format!(
+                    "Recharge succeeded via Stripe {payment_intent_id}"
+                ))),
+                ..Default::default()
+            }
+            .insert(&txn)
+            .await?;
         }
 
         txn.commit().await?;

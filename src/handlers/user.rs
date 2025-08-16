@@ -144,6 +144,9 @@ pub fn user_config(cfg: &mut web::ServiceConfig) {
             .route("/profile", web::get().to(get_profile))
             .route("/profile", web::put().to(update_profile))
             .route("/referrals", web::get().to(get_referrals))
-            .route("/wallet/transactions", web::get().to(get_wallet_transactions)),
+            .route(
+                "/wallet/transactions",
+                web::get().to(get_wallet_transactions),
+            ),
     );
 }
