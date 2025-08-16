@@ -23,7 +23,11 @@ impl PublicPaths {
             // 前缀匹配的公开路径
             prefix_paths: vec!["/swagger-ui/", "/api-docs/", "/api/v1/auth/", "/webhook/"],
             // 需要排除的路径（即使在公开前缀下也需要认证）
-            excluded_paths: vec!["/api/v1/auth/refresh", "/api/v1/auth/logout"],
+            excluded_paths: vec![
+                "/api/v1/auth/refresh",
+                "/api/v1/auth/logout",
+                "/api/v1/auth/reset-password",
+            ],
         }
     }
 

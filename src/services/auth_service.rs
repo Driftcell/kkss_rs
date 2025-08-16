@@ -329,4 +329,41 @@ impl AuthService {
         let user = self.get_user_by_id(user_id).await?;
         self.build_user_response_with_referrals(user).await
     }
+
+    /// 通过手机验证码重设密码
+    /// 步骤：校验手机号 -> 校验新密码强度 -> 调用 Twilio Verify 校验验证码 -> 查找用户 -> 更新密码哈希
+    pub async fn reset_password_with_phone_code(
+        &self,
+        phone: &str,
+        verification_code: &str,
+        new_password: &str,
+    ) -> AppResult<()> {
+        // 校验输入
+        validate_us_phone(phone)?;
+        validate_password(new_password)?;
+
+        // 校验验证码（Twilio Verify）
+        let approved = self
+            .twilio_service
+            .check_verification_code(phone, verification_code)
+            .await?;
+        if !approved {
+            return Err(AppError::ValidationError(
+                "The verification code is incorrect or expired".to_string(),
+            ));
+        }
+
+        // 查找用户
+        let user = self.get_user_by_phone(phone).await?;
+
+        // 计算新密码哈希
+        let new_hash = hash_password(new_password)?;
+
+        // 更新数据库
+        let mut active: users::ActiveModel = user.into();
+        active.password_hash = Set(new_hash);
+        active.update(&self.pool).await?;
+
+        Ok(())
+    }
 }

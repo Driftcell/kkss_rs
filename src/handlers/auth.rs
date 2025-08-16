@@ -134,12 +134,39 @@ pub async fn refresh(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/reset-password",
+    tag = "auth",
+    request_body = ResetPasswordRequest,
+    responses(
+        (status = 200, description = "重设密码成功"),
+        (status = 400, description = "请求参数错误"),
+        (status = 404, description = "用户不存在"),
+        (status = 500, description = "服务器内部错误")
+    )
+)]
+pub async fn reset_password(
+    auth_service: web::Data<AuthService>,
+    request: web::Json<ResetPasswordRequest>,
+) -> Result<HttpResponse> {
+    let req = request.into_inner();
+    match auth_service
+        .reset_password_with_phone_code(&req.phone, &req.verification_code, &req.new_password)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::Ok().json(json!({"success": true}))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
 pub fn auth_config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/auth")
             .route("/send-code", web::post().to(send_code))
             .route("/register", web::post().to(register))
             .route("/login", web::post().to(login))
-            .route("/refresh", web::post().to(refresh)),
+            .route("/refresh", web::post().to(refresh))
+            .route("/reset-password", web::post().to(reset_password)),
     );
 }

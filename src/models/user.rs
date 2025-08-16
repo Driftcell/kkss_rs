@@ -80,6 +80,16 @@ pub struct SendCodeResponse {
     pub expires_in: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ResetPasswordRequest {
+    #[schema(example = "+12345678901")]
+    pub phone: String,
+    #[schema(example = "123456")]
+    pub verification_code: String,
+    #[schema(example = "NewPassword123")]
+    pub new_password: String,
+}
+
 // Convert from entity Model to API response
 impl From<user_entity::Model> for UserResponse {
     fn from(m: user_entity::Model) -> Self {
