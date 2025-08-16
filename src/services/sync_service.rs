@@ -1,5 +1,5 @@
 use crate::entities::{
-    discount_code_entity as discount_codes, order_entity as orders,
+    MemberType, discount_code_entity as discount_codes, order_entity as orders,
     sweet_cash_transaction_entity as sct, user_entity as users,
 };
 use crate::error::AppResult;
@@ -105,79 +105,105 @@ impl SyncService {
                 log::warn!("User {user_id_db} not found inside txn when updating stamps");
             }
 
-            // 订单返利：若用户存在推荐人，则用户与推荐人各获得订单金额的 10%
-            // 只有存在推荐人时才发放双方各 10% 返利
-            if let Some(referrer_id) = referrer_id_opt {
-                if price_cents > 0 {
-                    let rebate = price_cents / 10; // 向下取整
-                    if rebate > 0 {
-                        // 下单用户返利
-                        if let Some(user_model_in_txn) =
-                            users::Entity::find_by_id(user_id_db).one(&txn).await?
-                        {
-                            let user_new_balance = user_model_in_txn.balance.unwrap_or(0) + rebate;
-                            let mut user_active = user_model_in_txn.into_active_model();
-                            user_active.balance = Set(Some(user_new_balance));
-                            user_active.update(&txn).await?;
+            // 订单返利（Sweet/Super 会员按自身等级返利；Fan 或已过期不返）
+            if price_cents > 0 {
+                // 查询当前下单用户（事务内）以获取最新余额/会员信息
+                if let Some(buyer) = users::Entity::find_by_id(user_id_db).one(&txn).await? {
+                    let now = chrono::Utc::now();
+
+                    // 判断是否为有效付费会员（非 Fan 且未过期）
+                    let is_active_paid = |u: &users::Model| -> bool {
+                        matches!(
+                            u.member_type,
+                            MemberType::SweetShareholder | MemberType::SuperShareholder
+                        ) && u.membership_expires_at.map(|t| t > now).unwrap_or(false)
+                    };
+
+                    // 买家返利
+                    if is_active_paid(&buyer) {
+                        let buyer_member_type = buyer.member_type.clone();
+                        let buyer_rebate = match buyer_member_type {
+                            MemberType::SweetShareholder => (price_cents * 5) / 100,
+                            MemberType::SuperShareholder => price_cents / 10,
+                            MemberType::Fan => 0,
+                        };
+                        if buyer_rebate > 0 {
+                            let buyer_new_balance = buyer.balance.unwrap_or(0) + buyer_rebate;
+                            let mut buyer_am = buyer.into_active_model();
+                            buyer_am.balance = Set(Some(buyer_new_balance));
+                            buyer_am.update(&txn).await?;
 
                             sct::ActiveModel {
                                 user_id: Set(user_id_db),
                                 transaction_type: Set(sct::TransactionType::Earn),
-                                amount: Set(rebate),
-                                balance_after: Set(user_new_balance),
+                                amount: Set(buyer_rebate),
+                                balance_after: Set(buyer_new_balance),
                                 related_order_id: Set(Some(order_record.id)),
                                 description: Set(Some(format!(
-                                    "Order rebate 10% for order {}",
+                                    "Order cashback {}% for order {}",
+                                    match buyer_member_type {
+                                        MemberType::SweetShareholder => 5,
+                                        MemberType::SuperShareholder => 10,
+                                        MemberType::Fan => 0,
+                                    },
                                     order_record.id
                                 ))),
                                 ..Default::default()
                             }
                             .insert(&txn)
                             .await?;
-                        } else {
-                            log::warn!(
-                                "User {user_id_db} not found inside txn when applying rebate"
-                            );
                         }
+                    }
 
-                        // 推荐人返利
-                        if let Some(ref_model_in_txn) =
+                    // 推荐人返利（好友下单时，推荐人若为有效付费会员则获得返利）
+                    if let Some(referrer_id) = referrer_id_opt {
+                        if let Some(referrer) =
                             users::Entity::find_by_id(referrer_id).one(&txn).await?
                         {
-                            let referrer_new_balance =
-                                ref_model_in_txn.balance.unwrap_or(0) + rebate;
-                            let mut ref_active = ref_model_in_txn.into_active_model();
-                            ref_active.balance = Set(Some(referrer_new_balance));
-                            ref_active.update(&txn).await?;
+                            if is_active_paid(&referrer) {
+                                let ref_member_type = referrer.member_type.clone();
+                                let ref_rebate = match ref_member_type {
+                                    MemberType::SweetShareholder => (price_cents * 5) / 100,
+                                    MemberType::SuperShareholder => price_cents / 10,
+                                    MemberType::Fan => 0,
+                                };
+                                if ref_rebate > 0 {
+                                    let ref_new_balance =
+                                        referrer.balance.unwrap_or(0) + ref_rebate;
+                                    let mut ref_am = referrer.into_active_model();
+                                    ref_am.balance = Set(Some(ref_new_balance));
+                                    ref_am.update(&txn).await?;
 
-                            sct::ActiveModel {
-                                user_id: Set(referrer_id),
-                                transaction_type: Set(sct::TransactionType::Earn),
-                                amount: Set(rebate),
-                                balance_after: Set(referrer_new_balance),
-                                related_order_id: Set(Some(order_record.id)),
-                                description: Set(Some(format!(
-                                    "Referral order rebate 10% from user {} order {}",
-                                    user_id_db, order_record.id
-                                ))),
-                                ..Default::default()
+                                    sct::ActiveModel {
+                                        user_id: Set(referrer_id),
+                                        transaction_type: Set(sct::TransactionType::Earn),
+                                        amount: Set(ref_rebate),
+                                        balance_after: Set(ref_new_balance),
+                                        related_order_id: Set(Some(order_record.id)),
+                                        description: Set(Some(format!(
+                                            "Referral cashback {}% from user {} order {}",
+                                            match ref_member_type {
+                                                MemberType::SweetShareholder => 5,
+                                                MemberType::SuperShareholder => 10,
+                                                MemberType::Fan => 0,
+                                            },
+                                            user_id_db,
+                                            order_record.id
+                                        ))),
+                                        ..Default::default()
+                                    }
+                                    .insert(&txn)
+                                    .await?;
+                                }
                             }
-                            .insert(&txn)
-                            .await?;
                         } else {
                             log::warn!(
-                                "Referrer {referrer_id} not found inside txn when applying rebate"
+                                "Referrer {referrer_id} not found inside txn when applying cashback"
                             );
                         }
-                        log::info!(
-                            "Order {} rebate distributed: user {} +{} cents & referrer {} +{} cents",
-                            order_record.id,
-                            user_id_db,
-                            rebate,
-                            referrer_id,
-                            rebate
-                        );
                     }
+                } else {
+                    log::warn!("User {user_id_db} not found inside txn when applying cashback");
                 }
             }
 
