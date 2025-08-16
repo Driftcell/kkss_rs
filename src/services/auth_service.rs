@@ -114,7 +114,7 @@ impl AuthService {
         let (referrer_id, referrer_is_paid, member_type) =
             if let Some(referrer_code) = &request.referrer_code {
                 let ref_row = users::Entity::find()
-                    .filter(users::Column::MemberCode.eq(referrer_code.clone()))
+                    .filter(users::Column::ReferralCode.eq(referrer_code.clone()))
                     .one(&self.pool)
                     .await?;
 
@@ -165,9 +165,7 @@ impl AuthService {
                 .create_user_discount_code(user_id, 50, CodeType::FreeTopping, 1)
                 .await
             {
-                log::error!(
-                    "Failed to grant Free Topping coupon to new user {user_id}: {e:?}"
-                );
+                log::error!("Failed to grant Free Topping coupon to new user {user_id}: {e:?}");
             }
         }
 
