@@ -28,9 +28,21 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(BirthdayRewards::UserId).big_integer().not_null())
-                    .col(ColumnDef::new(BirthdayRewards::RewardYear).integer().not_null())
-                    .col(ColumnDef::new(BirthdayRewards::Amount).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(BirthdayRewards::UserId)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BirthdayRewards::RewardYear)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BirthdayRewards::Amount)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(BirthdayRewards::CreatedAt)
                             .timestamp_with_time_zone()

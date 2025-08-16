@@ -90,11 +90,11 @@ impl AuthService {
             ));
         }
 
-    // 解析生日
-    let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
+        // 解析生日
+        let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
             .map_err(|_| AppError::ValidationError("Invalid birthday format".to_string()))?;
-    let bmm: i16 = birthday.month() as i16;
-    let bdd: i16 = birthday.day() as i16;
+        let bmm: i16 = birthday.month() as i16;
+        let bdd: i16 = birthday.day() as i16;
 
         // 从手机号生成会员号（去掉+1前缀的十位数字）
         let member_code = extract_member_code_from_phone(&request.phone)?;

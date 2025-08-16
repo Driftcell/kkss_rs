@@ -135,8 +135,15 @@ async fn main() -> std::io::Result<()> {
     {
         tokio::spawn(async move {
             loop {
-                match birthday_reward_service_for_task.grant_today_birthdays().await {
-                    Ok(n) => if n > 0 { log::info!("Birthday rewards granted: {n}"); },
+                match birthday_reward_service_for_task
+                    .grant_today_birthdays()
+                    .await
+                {
+                    Ok(n) => {
+                        if n > 0 {
+                            log::info!("Birthday rewards granted: {n}");
+                        }
+                    }
                     Err(e) => log::error!("Failed to grant birthday rewards: {e:?}"),
                 }
                 // 每小时执行一次

@@ -29,8 +29,14 @@ impl MigrationTrait for Migration {
         let backfill = Query::update()
             .table(Users::Table)
             .values([
-                (Users::BirthdayMonth, Expr::cust("EXTRACT(MONTH FROM \"birthday\")::smallint")),
-                (Users::BirthdayDay, Expr::cust("EXTRACT(DAY FROM \"birthday\")::smallint")),
+                (
+                    Users::BirthdayMonth,
+                    Expr::cust("EXTRACT(MONTH FROM \"birthday\")::smallint"),
+                ),
+                (
+                    Users::BirthdayDay,
+                    Expr::cust("EXTRACT(DAY FROM \"birthday\")::smallint"),
+                ),
             ])
             .to_owned();
         manager.exec_stmt(backfill).await?;
@@ -40,8 +46,16 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Users::Table)
-                    .modify_column(ColumnDef::new(Users::BirthdayMonth).small_integer().not_null())
-                    .modify_column(ColumnDef::new(Users::BirthdayDay).small_integer().not_null())
+                    .modify_column(
+                        ColumnDef::new(Users::BirthdayMonth)
+                            .small_integer()
+                            .not_null(),
+                    )
+                    .modify_column(
+                        ColumnDef::new(Users::BirthdayDay)
+                            .small_integer()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await?;
