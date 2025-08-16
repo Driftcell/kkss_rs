@@ -16,6 +16,8 @@ pub enum CodeType {
     SuperShareholderReward,
     #[sea_orm(string_value = "sweets_credits_reward")]
     SweetsCreditsReward,
+    #[sea_orm(string_value = "free_topping")]
+    FreeTopping,
 }
 
 impl std::fmt::Display for CodeType {
@@ -24,6 +26,7 @@ impl std::fmt::Display for CodeType {
             CodeType::ShareholderReward => write!(f, "shareholder_reward"),
             CodeType::SuperShareholderReward => write!(f, "super_shareholder_reward"),
             CodeType::SweetsCreditsReward => write!(f, "sweets_credits_reward"),
+            CodeType::FreeTopping => write!(f, "free_topping"),
         }
     }
 }

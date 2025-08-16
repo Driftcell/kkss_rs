@@ -1,8 +1,9 @@
-use crate::entities::MemberType;
 use crate::entities::user_entity as users;
+use crate::entities::{CodeType, MemberType};
 use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
+use crate::services::DiscountCodeService;
 use crate::utils::*;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
@@ -14,6 +15,7 @@ pub struct AuthService {
     pool: DatabaseConnection,
     jwt_service: JwtService,
     twilio_service: TwilioService,
+    discount_code_service: DiscountCodeService,
 }
 
 impl AuthService {
@@ -21,11 +23,13 @@ impl AuthService {
         pool: DatabaseConnection,
         jwt_service: JwtService,
         twilio_service: TwilioService,
+        discount_code_service: DiscountCodeService,
     ) -> Self {
         Self {
             pool,
             jwt_service,
             twilio_service,
+            discount_code_service,
         }
     }
 
@@ -107,29 +111,30 @@ impl AuthService {
         let password_hash = hash_password(&request.password)?;
 
         // 处理推荐人，要求推荐人不是 fan
-        let (referrer_id, member_type) = if let Some(referrer_code) = &request.referrer_code {
-            let ref_row = users::Entity::find()
-                .filter(users::Column::MemberCode.eq(referrer_code.clone()))
-                .one(&self.pool)
-                .await?;
+        let (referrer_id, referrer_is_paid, member_type) =
+            if let Some(referrer_code) = &request.referrer_code {
+                let ref_row = users::Entity::find()
+                    .filter(users::Column::MemberCode.eq(referrer_code.clone()))
+                    .one(&self.pool)
+                    .await?;
 
-            if let Some(row) = ref_row {
-                let rid = row.id;
-                let rtype = row.member_type;
-                if rtype == MemberType::Fan {
+                if let Some(row) = ref_row {
+                    let rid = row.id;
+                    let rtype = row.member_type;
+                    if rtype == MemberType::Fan {
+                        return Err(AppError::ValidationError(
+                            "The referrer is not eligible (fan)".to_string(),
+                        ));
+                    }
+                    (Some(rid), true, MemberType::Fan)
+                } else {
                     return Err(AppError::ValidationError(
-                        "The referrer is not eligible (fan)".to_string(),
+                        "The referrer does not exist".to_string(),
                     ));
                 }
-                (Some(rid), MemberType::Fan)
             } else {
-                return Err(AppError::ValidationError(
-                    "The referrer does not exist".to_string(),
-                ));
-            }
-        } else {
-            (None, MemberType::Fan)
-        };
+                (None, false, MemberType::Fan)
+            };
 
         // 生成推荐码
         let referral_code = generate_unique_referral_code(&self.pool).await?;
@@ -152,6 +157,19 @@ impl AuthService {
         .insert(&self.pool)
         .await?;
         let user_id = new_user.id;
+
+        // 如果存在推荐人且其为付费会员（非 Fan），发放 $0.5 Free Topping 优惠码（有效期 1 个月）
+        if referrer_is_paid {
+            if let Err(e) = self
+                .discount_code_service
+                .create_user_discount_code(user_id, 50, CodeType::FreeTopping, 1)
+                .await
+            {
+                log::error!(
+                    "Failed to grant Free Topping coupon to new user {user_id}: {e:?}"
+                );
+            }
+        }
 
         // 生成JWT令牌
         let access_token = self

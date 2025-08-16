@@ -20,7 +20,7 @@ pub struct DiscountCodeQuery {
     pub page: Option<u32>,
     pub per_page: Option<u32>,
     pub status: Option<String>,    // available/used/expired
-    pub code_type: Option<String>, // shareholder_reward/super_shareholder_reward/sweets_credits_reward
+    pub code_type: Option<String>, // shareholder_reward/super_shareholder_reward/sweets_credits_reward/free_topping
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
