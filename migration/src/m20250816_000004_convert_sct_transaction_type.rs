@@ -2,12 +2,6 @@ use sea_orm::{ConnectionTrait, Statement};
 use sea_orm_migration::prelude::extension::postgres::Type;
 use sea_orm_migration::prelude::*;
 
-#[derive(DeriveIden)]
-enum SweetCashTransactions {
-    Table,
-    TransactionType,
-}
-
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
