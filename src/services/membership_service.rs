@@ -156,16 +156,12 @@ impl MembershipService {
             });
         }
 
-        // 升级用户会员类型并设置/延长到期时间（默认 1 年）
+        // 升级用户会员类型并设置到期时间为NOW() + 1 year
         let new_member_type = rec.target_member_type.clone();
         if let Some(u) = users::Entity::find_by_id(user_id).one(&txn).await? {
-            let current_exp = u.membership_expires_at;
             let mut am = u.into_active_model();
             am.member_type = Set(new_member_type.clone());
-            // approximate extension: if expires_at > now then +1 year else now +1 year
-            let now = chrono::Utc::now();
-            let next =
-                current_exp.filter(|&t| t > now).unwrap_or(now) + chrono::Duration::days(365);
+            let next = chrono::Utc::now() + chrono::Duration::days(365);
             am.membership_expires_at = Set(Some(next));
             am.update(&txn).await?;
         }
