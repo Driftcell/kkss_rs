@@ -2,8 +2,8 @@ use rand::Rng;
 
 /// 生成6位数字代码（可用于验证码、优惠码等）
 pub fn generate_six_digit_code() -> String {
-    let mut rng = rand::thread_rng();
-    format!("{:06}", rng.gen_range(100000..=999999))
+    let mut rng = rand::rng();
+    format!("{:06}", rng.random_range(100000..=999999))
 }
 
 #[cfg(test)]
