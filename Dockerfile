@@ -15,11 +15,6 @@ FROM chef AS builder
 ARG APP_NAME=kkss-backend
 WORKDIR /build
 
-# Install system build dependencies (OpenSSL headers, pkg-config, build tools)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-	pkg-config libssl-dev ca-certificates build-essential && \
-	rm -rf /var/lib/apt/lists/*
-
 # Cook cached dependencies for the entire workspace (root crate + migration)
 COPY --from=planner /build/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -32,11 +27,6 @@ RUN cargo build --release --locked --bin ${APP_NAME}
 FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
-
-# Install required runtime libs (OpenSSL for reqwest default-tls, CA certs for HTTPS)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-	ca-certificates libssl3 && \
-	rm -rf /var/lib/apt/lists/*
 
 # Copy binary
 COPY --from=builder /build/target/release/kkss-backend ./kkss-backend
