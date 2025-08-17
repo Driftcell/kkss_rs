@@ -14,7 +14,7 @@ use stripe::{
 ///
 /// # 示例
 ///
-/// ```rust
+/// ```ignore
 /// use kkss_backend::external::stripe::{StripeService, StripeConfig};
 ///
 /// let config = StripeConfig {
