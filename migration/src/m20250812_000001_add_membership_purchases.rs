@@ -73,7 +73,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(MembershipPurchases::Status)
                             .custom(Alias::new("membership_purchase_status"))
                             .not_null()
-                            .default("'pending'"),
+                            .default(Expr::cust("'pending'::membership_purchase_status")),
                     )
                     .col(
                         ColumnDef::new(MembershipPurchases::StripeStatus)
