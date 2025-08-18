@@ -3,25 +3,6 @@ use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
- 
-
-#[derive(DeriveIden)]
-enum Users {
-    Table,
-    MemberType,
-}
-
-#[derive(DeriveIden)]
-enum DiscountCodes {
-    Table,
-    CodeType,
-}
-
-#[derive(DeriveIden)]
-enum RechargeRecords {
-    Table,
-    Status,
-}
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
@@ -47,7 +28,7 @@ impl MigrationTrait for Migration {
         .await?;
 
         // Alter columns to use enum types with explicit USING casts
-    let db = manager.get_connection();
+        let db = manager.get_connection();
 
         // users.member_type -> member_type
         db.execute(Statement::from_string(
