@@ -2,19 +2,13 @@ use sea_orm::Statement;
 use sea_orm_migration::prelude::extension::postgres::Type;
 use sea_orm_migration::prelude::*;
 
-#[derive(DeriveIden)]
-enum DiscountCodes {
-    Table,
-    CodeType,
-}
-
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Create new enum type code_type_new
+        // 1) Create a new enum type with the desired final variants
         manager
             .create_type(
                 Type::create()
@@ -28,17 +22,16 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Temporarily convert to TEXT to remap values
+        // 2) Convert the column to TEXT explicitly using USING, so we can rewrite values safely
         manager
-            .alter_table(
-                Table::alter()
-                    .table(DiscountCodes::Table)
-                    .modify_column(ColumnDef::new(DiscountCodes::CodeType).string().not_null())
-                    .to_owned(),
-            )
+            .get_connection()
+            .execute(Statement::from_string(
+                manager.get_database_backend(),
+                "ALTER TABLE \"discount_codes\" ALTER COLUMN \"code_type\" TYPE TEXT USING \"code_type\"::TEXT".to_string(),
+            ))
             .await?;
 
-        // Remap data with UPDATE CASE using Statement
+        // 3) Remap data to the new labels
         let stmt = Statement::from_string(
             manager.get_database_backend(),
             r#"UPDATE discount_codes SET code_type = CASE code_type
@@ -52,43 +45,28 @@ impl MigrationTrait for Migration {
         );
         manager.get_connection().execute(stmt).await?;
 
-        // Drop old type and recreate code_type with new variants
+        // 4) Convert the column to the new enum type explicitly with USING
+        manager
+            .get_connection()
+            .execute(Statement::from_string(
+                manager.get_database_backend(),
+                "ALTER TABLE \"discount_codes\" ALTER COLUMN \"code_type\" TYPE code_type_new USING \"code_type\"::code_type_new".to_string(),
+            ))
+            .await?;
+
+        // 5) Drop the old enum type now that nothing references it
         manager
             .drop_type(Type::drop().name(Alias::new("code_type")).to_owned())
-            .await
-            .ok();
-        manager
-            .create_type(
-                Type::create()
-                    .as_enum(Alias::new("code_type"))
-                    .values(vec![
-                        Alias::new("shareholder_reward"),
-                        Alias::new("super_shareholder_reward"),
-                        Alias::new("sweets_credits_reward"),
-                    ])
-                    .to_owned(),
-            )
             .await?;
 
-        // Convert column to new enum type
+        // 6) Rename the new enum type to the original name for backward compatibility
         manager
-            .alter_table(
-                Table::alter()
-                    .table(DiscountCodes::Table)
-                    .modify_column(
-                        ColumnDef::new(DiscountCodes::CodeType)
-                            .custom(Alias::new("code_type"))
-                            .not_null(),
-                    )
-                    .to_owned(),
-            )
+            .get_connection()
+            .execute(Statement::from_string(
+                manager.get_database_backend(),
+                "ALTER TYPE code_type_new RENAME TO code_type".to_string(),
+            ))
             .await?;
-
-        // Finally, drop the temp type if exists
-        manager
-            .drop_type(Type::drop().name(Alias::new("code_type_new")).to_owned())
-            .await
-            .ok();
         Ok(())
     }
 
