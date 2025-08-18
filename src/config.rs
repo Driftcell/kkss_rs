@@ -9,6 +9,8 @@ pub struct Config {
     pub twilio: TwilioConfig,
     pub stripe: StripeConfig,
     pub sevencloud: SevenCloudConfig,
+    #[serde(default)]
+    pub turnstile: TurnstileConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +51,15 @@ pub struct SevenCloudConfig {
     pub username: String,
     pub password: String,
     pub base_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TurnstileConfig {
+    pub secret_key: String,
+    #[serde(default)]
+    pub expected_hostname: Option<String>,
+    #[serde(default)]
+    pub expected_action: Option<String>,
 }
 
 impl Config {
@@ -115,6 +126,11 @@ impl Config {
                         base_url: get_env("SEVENCLOUD_BASE_URL")
                             .unwrap_or_else(|| "https://sz.sunzee.com.cn".to_string()),
                     },
+                    turnstile: TurnstileConfig {
+                        secret_key: get_env("TURNSTILE_SECRET_KEY").unwrap_or_default(),
+                        expected_hostname: get_env("TURNSTILE_EXPECTED_HOSTNAME"),
+                        expected_action: get_env("TURNSTILE_EXPECTED_ACTION"),
+                    },
                 }
             }
             Err(e) => {
@@ -178,6 +194,17 @@ impl Config {
         }
         if let Ok(v) = env::var("SEVENCLOUD_BASE_URL") {
             config.sevencloud.base_url = v;
+        }
+
+        // Turnstile
+        if let Ok(v) = env::var("TURNSTILE_SECRET_KEY") {
+            config.turnstile.secret_key = v;
+        }
+        if let Ok(v) = env::var("TURNSTILE_EXPECTED_HOSTNAME") {
+            config.turnstile.expected_hostname = Some(v);
+        }
+        if let Ok(v) = env::var("TURNSTILE_EXPECTED_ACTION") {
+            config.turnstile.expected_action = Some(v);
         }
 
         Ok(config)

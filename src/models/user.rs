@@ -73,6 +73,10 @@ pub struct AuthResponse {
 pub struct SendCodeRequest {
     #[schema(example = "+1234567890")]
     pub phone: String,
+    /// Turnstile token from client-side widget
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "CF_TURNSTILE_TOKEN")]
+    pub cf_turnstile_token: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

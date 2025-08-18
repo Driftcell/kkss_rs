@@ -1,5 +1,6 @@
 use crate::models::*;
 use crate::services::AuthService;
+use crate::external::TurnstileService;
 use actix_web::{HttpRequest, HttpResponse, ResponseError, Result, web};
 use serde_json::json;
 
@@ -16,8 +17,48 @@ use serde_json::json;
 )]
 pub async fn send_code(
     auth_service: web::Data<AuthService>,
+    turnstile: web::Data<TurnstileService>,
+    req: HttpRequest,
     request: web::Json<SendCodeRequest>,
 ) -> Result<HttpResponse> {
+    // 若启用 Turnstile，则要求并校验 token
+    if turnstile.as_ref().is_enabled() {
+        let token = match &request.cf_turnstile_token {
+            Some(t) if !t.is_empty() => t,
+            _ => {
+                return Ok(crate::error::AppError::ValidationError(
+                    "Missing Turnstile token".into(),
+                )
+                .error_response());
+            }
+        };
+
+        // 提取客户端 IP（优先 CF-Connecting-IP, 然后 X-Forwarded-For，再从连接信息）
+        let header_ip = req
+            .headers()
+            .get("CF-Connecting-IP")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                req.headers()
+                    .get("X-Forwarded-For")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+            });
+        let remote_ip = if let Some(ip) = header_ip {
+            Some(ip)
+        } else {
+            req.connection_info()
+                .realip_remote_addr()
+                .map(|s| s.to_string())
+        };
+        let remote_ip_ref = remote_ip.as_deref();
+
+    if let Err(e) = turnstile.verify_token(token, remote_ip_ref, None).await {
+            return Ok(e.error_response());
+        }
+    }
+
     match auth_service.send_verification_code(&request.phone).await {
         Ok(response) => Ok(HttpResponse::Ok().json(json!({
             "success": true,

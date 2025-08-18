@@ -1,3 +1,13 @@
+## Turnstile 保护短信验证码
+
+后端支持 Cloudflare Turnstile 服务端校验。配置 `config.toml` 或环境变量：
+
+- TURNSTILE_SECRET_KEY
+- TURNSTILE_EXPECTED_HOSTNAME (可选)
+- TURNSTILE_EXPECTED_ACTION (可选)
+
+启用后，调用 `/api/v1/auth/send-code` 时需提供 `cf_turnstile_token` 字段（来自前端 Turnstile 小组件 `cf-turnstile-response`）。
+
 # KKSS Backend
 
 基于Rust actix-web框架的冰淇凌推广网站后端系统，主要为消费者提供会员管理、优惠码兑换、充值等功能的API服务。

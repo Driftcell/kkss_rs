@@ -58,6 +58,7 @@ async fn main() -> std::io::Result<()> {
 
     // 创建外部服务
     let twilio_service = TwilioService::new(config.twilio.clone());
+    let turnstile_service = kkss_backend::external::TurnstileService::new(config.turnstile.clone());
     let stripe_service = StripeService::new(config.stripe.clone());
 
     let mut sevencloud_api = SevenCloudAPI::new(config.sevencloud.clone());
@@ -165,6 +166,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(create_cors())
             .wrap(AuthMiddleware::new(jwt_service.clone()))
             .app_data(web::Data::new(auth_service.clone()))
+            .app_data(web::Data::new(turnstile_service.clone()))
             .app_data(web::Data::new(user_service.clone()))
             .app_data(web::Data::new(order_service.clone()))
             .app_data(web::Data::new(discount_code_service.clone()))
