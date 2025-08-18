@@ -1,8 +1,9 @@
+use sea_orm::Statement;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
-use sea_orm_migration::prelude::extension::postgres::Type;
+ 
 
 #[derive(DeriveIden)]
 enum Users {
@@ -25,87 +26,49 @@ enum RechargeRecords {
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Create Postgres ENUM types if not exists
-        manager
-            .create_type(
-                Type::create()
-                    .as_enum(Alias::new("member_type"))
-                    .values(vec![
-                        Alias::new("fan"),
-                        Alias::new("sweet_shareholder"),
-                        Alias::new("super_shareholder"),
-                    ])
-                    .to_owned(),
-            )
-            .await?;
+        // Create Postgres ENUM types (idempotent)
+        let db = manager.get_connection();
+        db.execute(Statement::from_string(
+            manager.get_database_backend(),
+            "DO $$ BEGIN \n  CREATE TYPE member_type AS ENUM ('fan','sweet_shareholder','super_shareholder');\nEXCEPTION WHEN duplicate_object THEN NULL; END $$;".to_string(),
+        ))
+        .await?;
 
-        manager
-            .create_type(
-                Type::create()
-                    .as_enum(Alias::new("code_type"))
-                    .values(vec![
-                        Alias::new("welcome"),
-                        Alias::new("referral"),
-                        Alias::new("purchase_reward"),
-                        Alias::new("redeemed"),
-                    ])
-                    .to_owned(),
-            )
-            .await?;
+        db.execute(Statement::from_string(
+            manager.get_database_backend(),
+            "DO $$ BEGIN \n  CREATE TYPE code_type AS ENUM ('welcome','referral','purchase_reward','redeemed');\nEXCEPTION WHEN duplicate_object THEN NULL; END $$;".to_string(),
+        ))
+        .await?;
 
-        manager
-            .create_type(
-                Type::create()
-                    .as_enum(Alias::new("recharge_status"))
-                    .values(vec![
-                        Alias::new("pending"),
-                        Alias::new("succeeded"),
-                        Alias::new("failed"),
-                        Alias::new("canceled"),
-                    ])
-                    .to_owned(),
-            )
-            .await?;
+        db.execute(Statement::from_string(
+            manager.get_database_backend(),
+            "DO $$ BEGIN \n  CREATE TYPE recharge_status AS ENUM ('pending','succeeded','failed','canceled');\nEXCEPTION WHEN duplicate_object THEN NULL; END $$;".to_string(),
+        ))
+        .await?;
 
-        // Alter columns to use enum types
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(Users::Table)
-                    .modify_column(
-                        ColumnDef::new(Users::MemberType)
-                            .custom(Alias::new("member_type"))
-                            .not_null(),
-                    )
-                    .to_owned(),
-            )
-            .await?;
+        // Alter columns to use enum types with explicit USING casts
+    let db = manager.get_connection();
 
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(DiscountCodes::Table)
-                    .modify_column(
-                        ColumnDef::new(DiscountCodes::CodeType)
-                            .custom(Alias::new("code_type"))
-                            .not_null(),
-                    )
-                    .to_owned(),
-            )
-            .await?;
+        // users.member_type -> member_type
+        db.execute(Statement::from_string(
+            manager.get_database_backend(),
+            "ALTER TABLE \"users\" \n             ALTER COLUMN \"member_type\" TYPE member_type \n             USING \"member_type\"::member_type".to_string(),
+        ))
+        .await?;
 
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(RechargeRecords::Table)
-                    .modify_column(
-                        ColumnDef::new(RechargeRecords::Status)
-                            .custom(Alias::new("recharge_status"))
-                            .not_null(),
-                    )
-                    .to_owned(),
-            )
-            .await?;
+        // discount_codes.code_type -> code_type
+        db.execute(Statement::from_string(
+            manager.get_database_backend(),
+            "ALTER TABLE \"discount_codes\" \n             ALTER COLUMN \"code_type\" TYPE code_type \n             USING \"code_type\"::code_type".to_string(),
+        ))
+        .await?;
+
+        // recharge_records.status -> recharge_status
+        db.execute(Statement::from_string(
+            manager.get_database_backend(),
+            "ALTER TABLE \"recharge_records\" \n             ALTER COLUMN \"status\" TYPE recharge_status \n             USING \"status\"::recharge_status".to_string(),
+        ))
+        .await?;
         Ok(())
     }
 
