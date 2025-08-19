@@ -1,6 +1,6 @@
+use crate::external::TurnstileService;
 use crate::models::*;
 use crate::services::AuthService;
-use crate::external::TurnstileService;
 use actix_web::{HttpRequest, HttpResponse, ResponseError, Result, web};
 use serde_json::json;
 
@@ -54,7 +54,10 @@ pub async fn send_code(
         };
         let remote_ip_ref = remote_ip.as_deref();
 
-    if let Err(e) = turnstile.verify_token(token, remote_ip_ref, None).await {
+        log::info!("Verifying Turnstile token: {token}, IP: {remote_ip_ref:?}");
+
+        // 调用 Turnstile 服务验证
+        if let Err(e) = turnstile.verify_token(token, remote_ip_ref, None).await {
             return Ok(e.error_response());
         }
     }

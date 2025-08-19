@@ -42,7 +42,7 @@ impl SyncService {
             processed_count += 1;
         }
 
-        log::info!("Synchronization complete, processed orders: {processed_count}");
+        log::debug!("Synchronization complete, processed orders: {processed_count}");
         Ok(processed_count)
     }
 
@@ -240,7 +240,7 @@ impl SyncService {
             processed_count += 1;
         }
 
-        log::info!("Synchronization complete, processed discount codes: {processed_count}");
+        log::debug!("Synchronization complete, processed discount codes: {processed_count}");
         Ok(processed_count)
     }
 

@@ -100,7 +100,7 @@ async fn main() -> std::io::Result<()> {
                 let start_date = start.format("%Y-%m-%d %H:%M:%S").to_string();
                 let end_date = format!("{} 23:59:59", now.format("%Y-%m-%d"));
 
-                log::info!("Start syncing orders and discount codes: {start_date} ~ {end_date}");
+                log::debug!("Start syncing orders and discount codes: {start_date} ~ {end_date}");
                 // 同步订单
                 if let Err(e) = sync_service_clone.sync_orders(&start_date, &end_date).await {
                     log::error!("Failed to sync orders: {e:?}");
