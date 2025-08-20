@@ -70,24 +70,20 @@ impl TurnstileService {
             )));
         }
 
-        if let Some(expected) = &self.cfg.expected_hostname {
-            if let Some(host) = body.hostname.as_ref() {
-                if host != expected {
+        if let Some(expected) = &self.cfg.expected_hostname
+            && let Some(host) = body.hostname.as_ref()
+                && host != expected {
                     return Err(AppError::ValidationError(
                         "Turnstile hostname mismatch".into(),
                     ));
                 }
-            }
-        }
-        if let Some(expected) = &self.cfg.expected_action {
-            if let Some(action) = body.action.as_ref() {
-                if action != expected {
+        if let Some(expected) = &self.cfg.expected_action
+            && let Some(action) = body.action.as_ref()
+                && action != expected {
                     return Err(AppError::ValidationError(
                         "Turnstile action mismatch".into(),
                     ));
                 }
-            }
-        }
 
         Ok(())
     }

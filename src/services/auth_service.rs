@@ -164,15 +164,14 @@ impl AuthService {
         let user_id = new_user.id;
 
         // 如果存在推荐人且其为付费会员（非 Fan），发放 $0.5 Free Topping 优惠码（有效期 1 个月）
-        if referrer_is_paid {
-            if let Err(e) = self
+        if referrer_is_paid
+            && let Err(e) = self
                 .discount_code_service
                 .create_user_discount_code(user_id, 50, CodeType::FreeTopping, 1)
                 .await
             {
                 log::error!("Failed to grant Free Topping coupon to new user {user_id}: {e:?}");
             }
-        }
 
         // 生成JWT令牌
         let access_token = self

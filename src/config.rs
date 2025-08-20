@@ -142,32 +142,28 @@ impl Config {
         if let Ok(v) = env::var("SERVER_HOST") {
             config.server.host = v;
         }
-        if let Ok(v) = env::var("SERVER_PORT") {
-            if let Ok(p) = v.parse() {
+        if let Ok(v) = env::var("SERVER_PORT")
+            && let Ok(p) = v.parse() {
                 config.server.port = p;
             }
-        }
         if let Ok(v) = env::var("DATABASE_URL") {
             config.database.url = v;
         }
-        if let Ok(v) = env::var("DB_MAX_CONNECTIONS") {
-            if let Ok(mc) = v.parse() {
+        if let Ok(v) = env::var("DB_MAX_CONNECTIONS")
+            && let Ok(mc) = v.parse() {
                 config.database.max_connections = mc;
             }
-        }
         if let Ok(v) = env::var("JWT_SECRET") {
             config.jwt.secret = v;
         }
-        if let Ok(v) = env::var("JWT_ACCESS_EXPIRES_IN") {
-            if let Ok(n) = v.parse() {
+        if let Ok(v) = env::var("JWT_ACCESS_EXPIRES_IN")
+            && let Ok(n) = v.parse() {
                 config.jwt.access_token_expires_in = n;
             }
-        }
-        if let Ok(v) = env::var("JWT_REFRESH_EXPIRES_IN") {
-            if let Ok(n) = v.parse() {
+        if let Ok(v) = env::var("JWT_REFRESH_EXPIRES_IN")
+            && let Ok(n) = v.parse() {
                 config.jwt.refresh_token_expires_in = n;
             }
-        }
         if let Ok(v) = env::var("TWILIO_ACCOUNT_SID") {
             config.twilio.account_sid = v;
         }

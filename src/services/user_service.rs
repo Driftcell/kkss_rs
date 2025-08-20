@@ -50,13 +50,12 @@ impl UserService {
         request: UpdateUserRequest,
     ) -> AppResult<UserResponse> {
         // 验证输入
-        if let Some(username) = &request.username {
-            if username.len() < 2 || username.len() > 20 {
+        if let Some(username) = &request.username
+            && (username.len() < 2 || username.len() > 20) {
                 return Err(AppError::ValidationError(
                     "Username length must be between 2 and 20 characters".to_string(),
                 ));
             }
-        }
 
         let birthday = if let Some(birthday_str) = &request.birthday {
             Some(
