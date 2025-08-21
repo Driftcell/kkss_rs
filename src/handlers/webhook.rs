@@ -92,6 +92,9 @@ async fn handle_stripe_event(
         EventType::CustomerSubscriptionDeleted => {
             handle_subscription_deleted(event, stripe_transaction_service).await
         }
+        EventType::ChargeDisputeCreated => {
+            handle_refund_created(event, stripe_transaction_service).await
+        }
         _ => {
             info!("Unhandled event type: {:?}", event.type_);
             Ok(())
@@ -273,6 +276,23 @@ async fn handle_subscription_deleted(
     // TODO: Mark month card as inactive
     // This should deactivate the user's month card
     info!("Subscription deleted, should deactivate month card: {}", subscription.id);
+
+    Ok(())
+}
+
+/// 处理退款创建事件
+async fn handle_refund_created(
+    event: Event,
+    _stripe_transaction_service: &StripeTransactionService,
+) -> AppResult<()> {
+    // Extract charge information from dispute
+    info!("Refund/dispute created: {}", event.id);
+    
+    // TODO: Handle refund logic
+    // 1. Find the related payment intent
+    // 2. Update transaction status to refunded
+    // 3. Reverse any benefits given (balance, membership, month card)
+    warn!("Refund handling not fully implemented yet");
 
     Ok(())
 }

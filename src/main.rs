@@ -157,14 +157,19 @@ async fn main() -> std::io::Result<()> {
 
     // 启动月卡用户每日优惠券发放任务（每24小时运行一次）
     {
+        let discount_code_service_for_task = discount_code_service.clone();
         tokio::spawn(async move {
             loop {
                 match stripe_transaction_service_for_task.get_active_month_card_users().await {
                     Ok(users) => {
                         log::info!("Found {} active month card users for daily coupon generation", users.len());
                         for user_id in users {
-                            // TODO: 这里需要集成优惠券服务来生成$5.5的优惠券
-                            log::debug!("Should generate $5.5 coupon for user {}", user_id);
+                            if let Err(e) = stripe_transaction_service_for_task
+                                .generate_daily_coupon_for_user(user_id, &discount_code_service_for_task)
+                                .await
+                            {
+                                log::error!("Failed to generate coupon for user {}: {}", user_id, e);
+                            }
                         }
                     },
                     Err(e) => log::error!("Failed to get active month card users: {e:?}"),

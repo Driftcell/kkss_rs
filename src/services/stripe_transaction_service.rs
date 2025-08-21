@@ -290,4 +290,31 @@ impl StripeTransactionService {
 
         Ok(users.into_iter().map(|mc| mc.user_id).collect())
     }
+
+    /// Generate daily coupon for month card user
+    pub async fn generate_daily_coupon_for_user(
+        &self,
+        user_id: i64,
+        discount_code_service: &crate::services::DiscountCodeService,
+    ) -> AppResult<()> {
+        use crate::entities::CodeType;
+
+        // Check if user has active month card
+        if !self.has_active_month_card(user_id).await? {
+            return Ok(()); // User doesn't have active month card
+        }
+
+        // Generate $5.5 coupon (550 cents) that expires in 1 month
+        let coupon_id = discount_code_service
+            .create_user_discount_code(
+                user_id,
+                550, // $5.5 in cents
+                CodeType::SweetsCreditsReward,
+                1, // Expires in 1 month
+            )
+            .await?;
+
+        log::info!("Generated daily coupon {} for month card user {}", coupon_id, user_id);
+        Ok(())
+    }
 }
