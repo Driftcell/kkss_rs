@@ -103,12 +103,18 @@ async fn handle_stripe_event(
             // 作为备用通道：当使用 Checkout Session 支付时，直接在完成事件里按分类处理
             if let EventObject::CheckoutSession(sess) = event.data.object.clone() {
                 // metadata 中包含 user_id 与 category（我们在创建 session 时写入了）
-                let user_id = sess
+                let mut user_id = sess
                     .metadata
                     .as_ref()
                     .and_then(|m| m.get("user_id"))
                     .and_then(|v| v.parse::<i64>().ok())
                     .unwrap_or(0);
+                if user_id == 0 {
+                    // 回退到 client_reference_id
+                    if let Some(ref crid) = sess.client_reference_id {
+                        user_id = crid.parse::<i64>().unwrap_or(0);
+                    }
+                }
                 let category = sess
                     .metadata
                     .as_ref()
@@ -156,7 +162,10 @@ async fn handle_stripe_event(
                         _ => {}
                     }
                 } else {
-                    warn!("CheckoutSessionCompleted missing payment_intent or user_id");
+                    warn!(
+                        "CheckoutSessionCompleted missing payment_intent or user_id (session_id={:?})",
+                        sess.id
+                    );
                 }
             }
             Ok(())

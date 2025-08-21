@@ -9,7 +9,7 @@ use crate::models::*;
 use crate::services::{DiscountCodeService, StripeTransactionService};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    Set, TransactionTrait,
+    QueryOrder, Set, TransactionTrait,
 };
 use stripe::PaymentIntentStatus;
 
@@ -175,14 +175,36 @@ impl MembershipService {
         }
 
         let txn = self.pool.begin().await?;
-        // 读取记录
-        let rec_m = mp::Entity::find()
+        // 读取记录：优先按 payment_intent_id 精确匹配；若找不到，回退到按用户+金额+pending 匹配，并修正记录中的 PIID
+        let rec = match mp::Entity::find()
             .filter(mp::Column::StripePaymentIntentId.eq(req.payment_intent_id.clone()))
             .filter(mp::Column::UserId.eq(user_id))
             .one(&txn)
             .await?
-            .ok_or_else(|| AppError::NotFound("Membership purchase record not found".into()))?;
-        let mut rec = rec_m;
+        {
+            Some(r) => r,
+            None => {
+                // 回退：查找该用户最近一条金额相同且仍为 pending 的记录
+                let alt = mp::Entity::find()
+                    .filter(mp::Column::UserId.eq(user_id))
+                    .filter(mp::Column::Status.eq(MembershipPurchaseStatus::Pending))
+                    .filter(mp::Column::Amount.eq(payment_intent.amount))
+                    .order_by_desc(mp::Column::CreatedAt)
+                    .one(&txn)
+                    .await?;
+                let Some(alt_rec) = alt else {
+                    return Err(AppError::NotFound(
+                        "Membership purchase record not found".into(),
+                    ));
+                };
+                // 更新其 payment_intent_id 为实际支付成功的 PI，避免后续再次不匹配
+                let mut am = alt_rec.clone().into_active_model();
+                am.stripe_payment_intent_id = Set(req.payment_intent_id.clone());
+                am.update(&txn).await?;
+                alt_rec
+            }
+        };
+        let mut rec = rec;
 
         if rec.status == MembershipPurchaseStatus::Succeeded {
             // 已经处理，直接返回用户当前会员类型

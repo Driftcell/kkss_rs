@@ -199,6 +199,10 @@ impl StripeService {
             quantity: Some(1),
             ..Default::default()
         }]);
+        // 将元数据同时放在 Session 与 PaymentIntent 中，便于不同 webhook 对象读取
+        create.metadata = Some(meta.clone());
+        let client_ref = user_id.to_string();
+        create.client_reference_id = Some(&client_ref);
         create.payment_intent_data = Some(CreateCheckoutSessionPaymentIntentData {
             description,
             metadata: Some(meta),
