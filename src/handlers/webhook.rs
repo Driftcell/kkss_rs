@@ -126,8 +126,8 @@ async fn handle_stripe_event(
         }
         EventType::InvoicePaymentSucceeded => {
             // Subscription renewal success
-            if let EventObject::Invoice(inv) = event.data.object.clone() {
-                if let Some(sub) = inv.subscription.as_ref() {
+            if let EventObject::Invoice(inv) = event.data.object.clone()
+                && let Some(sub) = inv.subscription.as_ref() {
                     let sid: Option<String> = match sub {
                         Expandable::Id(id) => Some(id.to_string()),
                         Expandable::Object(obj) => Some(obj.id.to_string()),
@@ -136,7 +136,6 @@ async fn handle_stripe_event(
                         let _ = monthly_service.renew_by_subscription(sub_id).await;
                     }
                 }
-            }
             Ok(())
         }
         _ => {

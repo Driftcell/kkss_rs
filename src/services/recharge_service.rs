@@ -87,7 +87,7 @@ impl RechargeService {
             .record_payment_intent(
                 user_id,
                 StripeTransactionCategory::Recharge,
-                &payment_intent.id.to_string(),
+                payment_intent.id.as_ref(),
                 Some(request.amount),
                 Some("usd".to_string()),
                 Some(format!("{:?}", payment_intent.status)),

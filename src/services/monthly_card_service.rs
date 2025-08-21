@@ -33,19 +33,41 @@ impl MonthlyCardService {
         }
     }
 
-    fn monthly_card_price_cents() -> i64 {
-        2000
-    }
-
     pub async fn create_monthly_card_intent(
         &self,
         user_id: i64,
         req: CreateMonthlyCardIntentRequest,
     ) -> AppResult<CreateMonthlyCardIntentResponse> {
-        let amount = Self::monthly_card_price_cents();
-        // Create PaymentIntent for one_time plan. Subscription flow TBD.
+        // 优先从配置读取对应 price 的金额，否则退回到本地常量（2000）
+        let (_prod, one_time_pid, sub_pid) = self.stripe_service.monthly_card_ids();
+        let chosen_price_id = match req.plan_type {
+            crate::entities::MonthlyCardPlanType::OneTime => one_time_pid,
+            crate::entities::MonthlyCardPlanType::Subscription => sub_pid,
+        };
+        let amount = if let Some(pid) = chosen_price_id.as_deref() {
+            // 如果配置了 price_id，则到 Stripe 查询 unit_amount
+            match self.stripe_service.get_price_unit_amount(pid).await {
+                Ok(v) => v,
+                Err(e) => {
+                    log::warn!("Failed to read price {pid} from Stripe: {e:?}");
+                    return Err(AppError::ValidationError(
+                        "Failed to read price from Stripe".into(),
+                    ));
+                }
+            }
+        } else {
+            return Err(AppError::ValidationError("No valid price ID found".into()));
+        };
+
+        // Create PaymentIntent，附带 plan_type 与（可用时）price_id/product_id 方便审计
         let mut extra = std::collections::HashMap::new();
         extra.insert("plan_type".to_string(), req.plan_type.to_string());
+        if let Some(pid) = chosen_price_id {
+            extra.insert("price_id".to_string(), pid);
+        }
+        if let Some(prod) = _prod {
+            extra.insert("product_id".to_string(), prod);
+        }
         let pi = self
             .stripe_service
             .create_payment_intent_with_category(
@@ -77,7 +99,7 @@ impl MonthlyCardService {
             .record_payment_intent(
                 user_id,
                 StripeTransactionCategory::MonthlyCard,
-                &pi.id.to_string(),
+                pi.id.as_ref(),
                 Some(amount),
                 Some("usd".to_string()),
                 Some(format!("{:?}", pi.status)),

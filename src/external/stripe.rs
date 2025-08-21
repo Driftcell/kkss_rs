@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use stripe::{
     Client, CreatePaymentIntent, CreatePaymentIntentAutomaticPaymentMethods, Currency, Event,
-    PaymentIntent, PaymentIntentId,
+    PaymentIntent, PaymentIntentId, Price as StripePrice, PriceId,
 };
 
 /// Stripe服务，用于处理支付意图和webhook验证
@@ -77,6 +77,30 @@ impl StripeService {
             None,
         )
         .await
+    }
+
+    /// 读取某个 Price 的单位金额（单位：最小货币单位，如美分）
+    pub async fn get_price_unit_amount(&self, price_id: &str) -> AppResult<i64> {
+        let pid = PriceId::from_str(price_id)
+            .map_err(|e| AppError::ValidationError(format!("Invalid price id: {e}")))?;
+        let price = StripePrice::retrieve(&self.client, &pid, &[])
+            .await
+            .map_err(|e| {
+                AppError::ExternalApiError(format!("Failed to retrieve price {price_id}: {e}"))
+            })?;
+        let amt = price.unit_amount.ok_or_else(|| {
+            AppError::ValidationError(format!("Price {price_id} has no unit_amount configured"))
+        })?;
+        Ok(amt)
+    }
+
+    /// 返回月卡产品与价格ID（product, one_time_price, subscription_price）
+    pub fn monthly_card_ids(&self) -> (Option<String>, Option<String>, Option<String>) {
+        (
+            self.config.monthly_card_product_id.clone(),
+            self.config.monthly_card_one_time_price_id.clone(),
+            self.config.monthly_card_subscription_price_id.clone(),
+        )
     }
 
     /// 创建带有业务类别与自定义 metadata 的支付意图
