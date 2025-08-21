@@ -99,6 +99,68 @@ async fn handle_stripe_event(
             )
                 .await
         }
+        EventType::CheckoutSessionCompleted => {
+            // 作为备用通道：当使用 Checkout Session 支付时，直接在完成事件里按分类处理
+            if let EventObject::CheckoutSession(sess) = event.data.object.clone() {
+                // metadata 中包含 user_id 与 category（我们在创建 session 时写入了）
+                let user_id = sess
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.get("user_id"))
+                    .and_then(|v| v.parse::<i64>().ok())
+                    .unwrap_or(0);
+                let category = sess
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.get("category"))
+                    .map(|s| s.as_str())
+                    .unwrap_or("recharge");
+
+                let pi_id_opt: Option<String> = match sess.payment_intent {
+                    Some(Expandable::Id(ref id)) => Some(id.to_string()),
+                    Some(Expandable::Object(ref obj)) => Some(obj.id.to_string()),
+                    None => None,
+                };
+
+                if let (Some(pi_id), true) = (pi_id_opt, user_id > 0) {
+                    info!(
+                        "Checkout session completed for PI: {} (category: {}, user_id: {})",
+                        pi_id, category, user_id
+                    );
+                    match category {
+                        "recharge" => {
+                            let _ = recharge_service
+                                .handle_payment_success_webhook(&pi_id, user_id)
+                                .await;
+                        }
+                        "monthly_card" => {
+                            let _ = monthly_service
+                                .confirm_monthly_card(
+                                    user_id,
+                                    crate::models::ConfirmMonthlyCardRequest {
+                                        payment_intent_id: pi_id.clone(),
+                                    },
+                                )
+                                .await;
+                        }
+                        "membership" => {
+                            let _ = membership_service
+                                .confirm_membership(
+                                    user_id,
+                                    crate::models::ConfirmMembershipRequest {
+                                        payment_intent_id: pi_id.clone(),
+                                    },
+                                )
+                                .await;
+                        }
+                        _ => {}
+                    }
+                } else {
+                    warn!("CheckoutSessionCompleted missing payment_intent or user_id");
+                }
+            }
+            Ok(())
+        }
         EventType::PaymentIntentPaymentFailed => {
             handle_payment_intent_failed(event, recharge_service, stx_service).await
         }
