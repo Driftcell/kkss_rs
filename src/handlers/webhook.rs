@@ -2,12 +2,13 @@ use crate::entities::StripeTransactionCategory;
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
 use crate::services::monthly_card_service::MonthlyCardService;
+use crate::services::membership_service::MembershipService;
 use crate::services::recharge_service::RechargeService;
 use crate::services::stripe_transaction_service::StripeTransactionService;
 use actix_web::{HttpRequest, HttpResponse, Result, web};
 use log::{error, info, warn};
 use stripe::{Event, EventObject, EventType, Expandable, PaymentIntent};
-use crate::models::ConfirmMonthlyCardRequest;
+use crate::models::{ConfirmMonthlyCardRequest, ConfirmMembershipRequest};
 
 /// Stripe webhook处理器
 ///
@@ -18,6 +19,7 @@ pub async fn stripe_webhook(
     stripe_service: web::Data<StripeService>,
     recharge_service: web::Data<RechargeService>,
     monthly_service: web::Data<MonthlyCardService>,
+    membership_service: web::Data<MembershipService>,
     stx_service: web::Data<StripeTransactionService>,
 ) -> Result<HttpResponse> {
     let signature = match req.headers().get("stripe-signature") {
@@ -52,7 +54,15 @@ pub async fn stripe_webhook(
     );
 
     // 处理不同类型的事件
-    match handle_stripe_event(event, &recharge_service, &monthly_service, &stx_service).await {
+    match handle_stripe_event(
+        event,
+        &recharge_service,
+        &monthly_service,
+        &membership_service,
+        &stx_service,
+    )
+    .await
+    {
         Ok(_) => {
             info!("Successfully processed webhook event");
             Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -75,11 +85,18 @@ async fn handle_stripe_event(
     event: Event,
     recharge_service: &RechargeService,
     monthly_service: &MonthlyCardService,
+    membership_service: &MembershipService,
     stx_service: &StripeTransactionService,
 ) -> AppResult<()> {
     match event.type_ {
         EventType::PaymentIntentSucceeded => {
-            handle_payment_intent_succeeded(event, recharge_service, monthly_service, stx_service)
+            handle_payment_intent_succeeded(
+                event,
+                recharge_service,
+                monthly_service,
+                membership_service,
+                stx_service,
+            )
                 .await
         }
         EventType::PaymentIntentPaymentFailed => {
@@ -153,6 +170,7 @@ async fn handle_payment_intent_succeeded(
     event: Event,
     recharge_service: &RechargeService,
     monthly_service: &MonthlyCardService,
+    membership_service: &MembershipService,
     stx_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
@@ -205,6 +223,17 @@ async fn handle_payment_intent_succeeded(
                 .confirm_monthly_card(
                     user_id,
                     ConfirmMonthlyCardRequest {
+                        payment_intent_id: payment_intent.id.to_string(),
+                    },
+                )
+                .await?;
+        }
+        "membership" => {
+            // 会员升级支付成功 -> 确认并发放福利
+            let _ = membership_service
+                .confirm_membership(
+                    user_id,
+                    ConfirmMembershipRequest {
                         payment_intent_id: payment_intent.id.to_string(),
                     },
                 )
