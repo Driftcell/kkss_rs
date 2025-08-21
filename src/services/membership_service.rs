@@ -101,8 +101,27 @@ impl MembershipService {
             )
             .await?;
 
+        // Checkout URL（官方支付页）
+        let checkout = self
+            .stripe_service
+            .create_checkout_session_for_amount(
+                amount,
+                Some("usd".to_string()),
+                user_id,
+                "membership",
+                Some(format!(
+                    "User {} upgrade to {}",
+                    user_id, req.target_member_type
+                )),
+                None,
+            )
+            .await?;
+
         let status = MembershipPurchaseStatus::Pending;
-        let payment_intent_id = payment_intent.id.to_string();
+        let payment_intent_id = checkout
+            .payment_intent_id
+            .clone()
+            .unwrap_or_else(|| payment_intent.id.to_string());
         // upsert-like: try insert, ignore unique conflict
         let _ = mp::ActiveModel {
             user_id: Set(user_id),
@@ -118,7 +137,10 @@ impl MembershipService {
 
         Ok(CreateMembershipIntentResponse {
             payment_intent_id,
-            client_secret: payment_intent.client_secret.unwrap_or_default(),
+            client_secret: checkout
+                .client_secret
+                .unwrap_or_else(|| payment_intent.client_secret.unwrap_or_default()),
+            checkout_url: checkout.url,
             amount,
             target_member_type: target_type,
         })

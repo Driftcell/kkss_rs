@@ -50,6 +50,7 @@ impl RechargeService {
         let total_amount = request.amount + bonus_amount;
 
         // 创建Stripe支付意图
+        // 先创建 PaymentIntent 以保持现有记录逻辑
         let payment_intent = self
             .stripe_service
             .create_payment_intent_with_category(
@@ -66,9 +67,29 @@ impl RechargeService {
             )
             .await?;
 
+        // 再创建 Checkout Session 获取官方页面地址
+        let checkout = self
+            .stripe_service
+            .create_checkout_session_for_amount(
+                request.amount,
+                Some("usd".to_string()),
+                user_id,
+                "recharge",
+                Some(format!(
+                    "User {} recharges ${:.2}",
+                    user_id,
+                    request.amount as f64 / 100.0
+                )),
+                None,
+            )
+            .await?;
+
         // 保存充值记录 (直接绑定枚举到 ENUM 列)
         let status = RechargeStatus::Pending;
-        let payment_intent_id_str = payment_intent.id.to_string();
+        let payment_intent_id_str = checkout
+            .payment_intent_id
+            .clone()
+            .unwrap_or_else(|| payment_intent.id.to_string());
         let _ = rr::ActiveModel {
             user_id: Set(user_id),
             stripe_payment_intent_id: Set(payment_intent_id_str.clone()),
@@ -97,7 +118,10 @@ impl RechargeService {
 
         Ok(CreatePaymentIntentResponse {
             payment_intent_id: payment_intent_id_str,
-            client_secret: payment_intent.client_secret.unwrap_or_default(),
+            client_secret: checkout
+                .client_secret
+                .unwrap_or_else(|| payment_intent.client_secret.unwrap_or_default()),
+            checkout_url: checkout.url,
             amount: request.amount,
             bonus_amount,
             total_amount,
@@ -262,10 +286,25 @@ impl RechargeService {
         let recharge_record = if let Some(m) = recharge_record {
             m
         } else {
-            log::warn!(
-                "Recharge record not found for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
-            );
-            return Ok(());
+            // 回退：按用户找到最新 Pending 记录，并把其 PI 绑定为这次 webhook 的 PI
+            if let Some(mut latest) = rr::Entity::find()
+                .filter(rr::Column::UserId.eq(user_id))
+                .filter(rr::Column::Status.eq(RechargeStatus::Pending))
+                .order_by_desc(rr::Column::CreatedAt)
+                .one(&txn)
+                .await?
+            {
+                let mut am = latest.clone().into_active_model();
+                am.stripe_payment_intent_id = Set(payment_intent_id.to_string());
+                am.update(&txn).await?;
+                latest = rr::Entity::find_by_id(latest.id).one(&txn).await?.unwrap();
+                latest
+            } else {
+                log::warn!(
+                    "Recharge record not found for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
+                );
+                return Ok(());
+            }
         };
 
         // 检查是否已经处理过
@@ -350,6 +389,18 @@ impl RechargeService {
             log::info!(
                 "Marked payment as failed for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
+        } else if let Some(m) = rr::Entity::find()
+            .filter(rr::Column::UserId.eq(user_id))
+            .filter(rr::Column::Status.eq(RechargeStatus::Pending))
+            .order_by_desc(rr::Column::CreatedAt)
+            .one(&self.pool)
+            .await?
+        {
+            let mut am = m.into_active_model();
+            am.stripe_payment_intent_id = Set(payment_intent_id.to_string());
+            am.status = Set(failed_status);
+            am.stripe_status = Set(Some("failed".to_string()));
+            am.update(&self.pool).await?;
         } else {
             log::warn!(
                 "No recharge record found to mark as failed for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
@@ -385,6 +436,18 @@ impl RechargeService {
             log::info!(
                 "Marked payment as canceled for payment_intent_id: {payment_intent_id} and user_id: {user_id}"
             );
+        } else if let Some(m) = rr::Entity::find()
+            .filter(rr::Column::UserId.eq(user_id))
+            .filter(rr::Column::Status.eq(RechargeStatus::Pending))
+            .order_by_desc(rr::Column::CreatedAt)
+            .one(&self.pool)
+            .await?
+        {
+            let mut am = m.into_active_model();
+            am.stripe_payment_intent_id = Set(payment_intent_id.to_string());
+            am.status = Set(canceled_status);
+            am.stripe_status = Set(Some("canceled".to_string()));
+            am.update(&self.pool).await?;
         } else {
             log::warn!(
                 "No recharge record found to mark as canceled for payment_intent_id: {payment_intent_id} and user_id: {user_id}"

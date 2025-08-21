@@ -83,6 +83,22 @@ impl MonthlyCardService {
             )
             .await?;
 
+        // Checkout URL
+        let checkout = self
+            .stripe_service
+            .create_checkout_session_for_amount(
+                amount,
+                Some("usd".to_string()),
+                user_id,
+                "monthly_card",
+                Some(format!(
+                    "User {user_id} buys monthly card ({})",
+                    req.plan_type
+                )),
+                None,
+            )
+            .await?;
+
         let status = MonthlyCardStatus::Pending;
         let _ = mc::ActiveModel {
             user_id: Set(user_id),
@@ -108,8 +124,15 @@ impl MonthlyCardService {
             .await;
 
         Ok(CreateMonthlyCardIntentResponse {
-            payment_intent_id: pi.id.to_string(),
-            client_secret: pi.client_secret.clone().unwrap_or_default(),
+            payment_intent_id: checkout
+                .payment_intent_id
+                .clone()
+                .unwrap_or_else(|| pi.id.to_string()),
+            client_secret: checkout
+                .client_secret
+                .clone()
+                .unwrap_or_else(|| pi.client_secret.clone().unwrap_or_default()),
+            checkout_url: checkout.url,
             amount,
             plan_type: req.plan_type,
         })

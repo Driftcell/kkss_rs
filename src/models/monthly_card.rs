@@ -12,6 +12,8 @@ pub struct CreateMonthlyCardIntentRequest {
 pub struct CreateMonthlyCardIntentResponse {
     pub payment_intent_id: String,
     pub client_secret: String,
+    /// Stripe Checkout 会话 URL（跳转到 Stripe 官方收银台）
+    pub checkout_url: String,
     pub amount: i64,
     pub plan_type: MonthlyCardPlanType,
 }

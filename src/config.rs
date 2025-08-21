@@ -44,6 +44,12 @@ pub struct TwilioConfig {
 pub struct StripeConfig {
     pub secret_key: String,
     pub webhook_secret: String,
+    /// Stripe Checkout 成功跳转 URL（前端页面路由）
+    #[serde(default)]
+    pub checkout_success_url: Option<String>,
+    /// Stripe Checkout 取消跳转 URL（前端页面路由）
+    #[serde(default)]
+    pub checkout_cancel_url: Option<String>,
     #[serde(default)]
     pub monthly_card_product_id: Option<String>,
     #[serde(default)]
@@ -125,6 +131,8 @@ impl Config {
                     stripe: StripeConfig {
                         secret_key: get_env("STRIPE_SECRET_KEY").unwrap_or_default(),
                         webhook_secret: get_env("STRIPE_WEBHOOK_SECRET").unwrap_or_default(),
+                        checkout_success_url: get_env("STRIPE_CHECKOUT_SUCCESS_URL"),
+                        checkout_cancel_url: get_env("STRIPE_CHECKOUT_CANCEL_URL"),
                         monthly_card_product_id: get_env("STRIPE_MONTHLY_CARD_PRODUCT_ID"),
                         monthly_card_one_time_price_id: get_env(
                             "STRIPE_MONTHLY_CARD_ONE_TIME_PRICE_ID",
@@ -198,6 +206,12 @@ impl Config {
         }
         if let Ok(v) = env::var("STRIPE_WEBHOOK_SECRET") {
             config.stripe.webhook_secret = v;
+        }
+        if let Ok(v) = env::var("STRIPE_CHECKOUT_SUCCESS_URL") {
+            config.stripe.checkout_success_url = Some(v);
+        }
+        if let Ok(v) = env::var("STRIPE_CHECKOUT_CANCEL_URL") {
+            config.stripe.checkout_cancel_url = Some(v);
         }
         if let Ok(v) = env::var("STRIPE_MONTHLY_CARD_PRODUCT_ID") {
             config.stripe.monthly_card_product_id = Some(v);

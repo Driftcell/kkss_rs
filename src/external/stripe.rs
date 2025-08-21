@@ -3,8 +3,12 @@ use crate::error::{AppError, AppResult};
 use std::collections::HashMap;
 use std::str::FromStr;
 use stripe::{
-    Client, CreatePaymentIntent, CreatePaymentIntentAutomaticPaymentMethods, Currency, Event,
-    PaymentIntent, PaymentIntentId, Price as StripePrice, PriceId,
+    CheckoutSession, CheckoutSessionMode, Client, CreateCheckoutSession,
+    CreateCheckoutSessionLineItems, CreateCheckoutSessionLineItemsPriceData,
+    CreateCheckoutSessionLineItemsPriceDataProductData,
+    CreatePaymentIntent, CreatePaymentIntentAutomaticPaymentMethods,
+    CreateCheckoutSessionPaymentIntentData, Currency, Event, Expandable, PaymentIntent, PaymentIntentId,
+    Price as StripePrice, PriceId,
 };
 
 /// Stripe服务，用于处理支付意图和webhook验证
@@ -38,10 +42,198 @@ pub struct StripeService {
     config: StripeConfig,
 }
 
+#[derive(Clone, Debug)]
+pub struct CheckoutInit {
+    pub url: String,
+    pub payment_intent_id: Option<String>,
+    pub client_secret: Option<String>,
+}
+
 impl StripeService {
     pub fn new(config: StripeConfig) -> Self {
         let client = Client::new(&config.secret_key);
         Self { client, config }
+    }
+
+    /// 创建 Stripe Checkout Session（基于 price_id 的单个商品）并返回 URL
+    pub async fn create_checkout_session_with_price(
+        &self,
+        user_id: i64,
+        category: &str,
+        price_id: &str,
+        quantity: u64,
+        description: Option<String>,
+        extra_metadata: Option<HashMap<String, String>>,
+    ) -> AppResult<CheckoutInit> {
+        let success_url = self
+            .config
+            .checkout_success_url
+            .clone()
+            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_SUCCESS_URL".into()))?;
+        let cancel_url = self
+            .config
+            .checkout_cancel_url
+            .clone()
+            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_CANCEL_URL".into()))?;
+
+    let mut create = CreateCheckoutSession::new();
+    let success_ref = success_url;
+    let cancel_ref = cancel_url;
+    create.success_url = Some(&success_ref);
+    create.cancel_url = Some(&cancel_ref);
+        create.mode = Some(CheckoutSessionMode::Payment);
+        create.line_items = Some(vec![CreateCheckoutSessionLineItems {
+            price: Some(price_id.to_string()),
+            quantity: Some(quantity),
+            ..Default::default()
+        }]);
+        // 元数据记录 user/category
+        let mut meta = std::collections::HashMap::new();
+        meta.insert("user_id".to_string(), user_id.to_string());
+        meta.insert("category".to_string(), category.to_string());
+        if let Some(extra) = extra_metadata {
+            for (k, v) in extra.into_iter() {
+                meta.insert(k, v);
+            }
+        }
+    create.metadata = Some(meta.clone());
+    let client_ref = user_id.to_string();
+    create.client_reference_id = Some(&client_ref);
+        create.payment_intent_data = Some(CreateCheckoutSessionPaymentIntentData {
+            description: description,
+            metadata: Some(meta),
+            ..Default::default()
+        });
+
+        let session = CheckoutSession::create(&self.client, create)
+            .await
+            .map_err(|e| AppError::ExternalApiError(format!(
+                "Failed to create checkout session: {e}"
+            )))?;
+        let url = session
+            .url
+            .ok_or_else(|| AppError::ExternalApiError("Missing checkout url".into()))?;
+        // 提取 PaymentIntent 信息
+        let (pi_id_opt, client_secret) = match session.payment_intent {
+            Some(Expandable::Id(ref id)) => {
+                // 取回 PaymentIntent 以获取 client_secret
+                let pi = PaymentIntent::retrieve(&self.client, id, &[])
+                    .await
+                    .map_err(|e| AppError::ExternalApiError(format!(
+                        "Failed to retrieve PaymentIntent after session create: {e}"
+                    )))?;
+                (Some(id.to_string()), pi.client_secret)
+            }
+            Some(Expandable::Object(ref obj)) => {
+                (Some(obj.id.to_string()), obj.client_secret.clone())
+            }
+            None => (None, None),
+        };
+        Ok(CheckoutInit {
+            url,
+            payment_intent_id: pi_id_opt,
+            client_secret,
+        })
+    }
+
+    /// 创建 Stripe Checkout Session（基于自定义金额，底层仍走 PaymentIntent）并返回 URL
+    pub async fn create_checkout_session_for_amount(
+        &self,
+        amount: i64,
+        currency: Option<String>,
+        user_id: i64,
+        category: &str,
+        description: Option<String>,
+        extra_metadata: Option<HashMap<String, String>>,
+    ) -> AppResult<CheckoutInit> {
+        // 金额校验
+        if amount < 50 {
+            return Err(AppError::ValidationError("Minimum amount is $0.50".into()));
+        }
+        let success_url = self
+            .config
+            .checkout_success_url
+            .clone()
+            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_SUCCESS_URL".into()))?;
+        let cancel_url = self
+            .config
+            .checkout_cancel_url
+            .clone()
+            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_CANCEL_URL".into()))?;
+
+        // 解析货币
+        let currency = currency.unwrap_or_else(|| "usd".to_string());
+        let currency = match currency.to_lowercase().as_str() {
+            "usd" => Currency::USD,
+            "eur" => Currency::EUR,
+            "gbp" => Currency::GBP,
+            "jpy" => Currency::JPY,
+            "cad" => Currency::CAD,
+            "aud" => Currency::AUD,
+            _ => Currency::USD,
+        };
+
+        let mut meta = HashMap::new();
+        meta.insert("user_id".to_string(), user_id.to_string());
+        meta.insert("category".to_string(), category.to_string());
+        if let Some(extra) = extra_metadata {
+            for (k, v) in extra.into_iter() {
+                meta.insert(k, v);
+            }
+        }
+
+        // 通过 line_items.price_data 传金额/货币，并在 payment_intent_data 放描述与元数据
+        let mut create = CreateCheckoutSession::new();
+        let success_ref = success_url;
+        let cancel_ref = cancel_url;
+        create.success_url = Some(&success_ref);
+        create.cancel_url = Some(&cancel_ref);
+        create.mode = Some(CheckoutSessionMode::Payment);
+        create.line_items = Some(vec![CreateCheckoutSessionLineItems {
+            price_data: Some(CreateCheckoutSessionLineItemsPriceData {
+                currency,
+                unit_amount: Some(amount),
+                product_data: Some(CreateCheckoutSessionLineItemsPriceDataProductData {
+                    name: description.clone().unwrap_or_else(|| "Payment".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            quantity: Some(1),
+            ..Default::default()
+        }]);
+        create.payment_intent_data = Some(CreateCheckoutSessionPaymentIntentData {
+            description,
+            metadata: Some(meta),
+            ..Default::default()
+        });
+        let session = CheckoutSession::create(&self.client, create)
+            .await
+            .map_err(|e| AppError::ExternalApiError(format!(
+                "Failed to create checkout session: {e}"
+            )))?;
+        let url = session
+            .url
+            .ok_or_else(|| AppError::ExternalApiError("Missing checkout url".into()))?;
+        let (pi_id_opt, client_secret) = match session.payment_intent {
+            Some(Expandable::Id(ref id)) => {
+                let pi = PaymentIntent::retrieve(&self.client, id, &[])
+                    .await
+                    .map_err(|e| AppError::ExternalApiError(format!(
+                        "Failed to retrieve PaymentIntent after session create: {e}"
+                    )))?;
+                (Some(id.to_string()), pi.client_secret)
+            }
+            Some(Expandable::Object(ref obj)) => {
+                (Some(obj.id.to_string()), obj.client_secret.clone())
+            }
+            None => (None, None),
+        };
+        Ok(CheckoutInit {
+            url,
+            payment_intent_id: pi_id_opt,
+            client_secret,
+        })
     }
 
     /// 创建用于任意金额充值的支付意图
