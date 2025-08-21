@@ -7,6 +7,7 @@ use crate::services::stripe_transaction_service::StripeTransactionService;
 use actix_web::{HttpRequest, HttpResponse, Result, web};
 use log::{error, info, warn};
 use stripe::{Event, EventObject, EventType, Expandable, PaymentIntent};
+use crate::models::ConfirmMonthlyCardRequest;
 
 /// Stripe webhook处理器
 ///
@@ -78,7 +79,8 @@ async fn handle_stripe_event(
 ) -> AppResult<()> {
     match event.type_ {
         EventType::PaymentIntentSucceeded => {
-            handle_payment_intent_succeeded(event, recharge_service, stx_service).await
+            handle_payment_intent_succeeded(event, recharge_service, monthly_service, stx_service)
+                .await
         }
         EventType::PaymentIntentPaymentFailed => {
             handle_payment_intent_failed(event, recharge_service, stx_service).await
@@ -150,6 +152,7 @@ async fn handle_stripe_event(
 async fn handle_payment_intent_succeeded(
     event: Event,
     recharge_service: &RechargeService,
+    monthly_service: &MonthlyCardService,
     stx_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
@@ -189,11 +192,27 @@ async fn handle_payment_intent_succeeded(
         )
         .await;
 
-    if category == "recharge" {
-        // 调用recharge_service处理支付成功
-        recharge_service
-            .handle_payment_success_webhook(payment_intent.id.as_ref(), user_id)
-            .await?;
+    match category {
+        "recharge" => {
+            // 充值成功
+            recharge_service
+                .handle_payment_success_webhook(payment_intent.id.as_ref(), user_id)
+                .await?;
+        }
+        "monthly_card" => {
+            // 月卡支付成功 -> 激活/确认
+            let _ = monthly_service
+                .confirm_monthly_card(
+                    user_id,
+                    ConfirmMonthlyCardRequest {
+                        payment_intent_id: payment_intent.id.to_string(),
+                    },
+                )
+                .await?;
+        }
+        _ => {
+            // 其他分类暂不处理
+        }
     }
 
     Ok(())
@@ -242,10 +261,12 @@ async fn handle_payment_intent_failed(
         )
         .await;
 
-    // 调用recharge_service处理支付失败
-    recharge_service
-        .handle_payment_failure_webhook(payment_intent.id.as_ref(), user_id)
-        .await?;
+    // 仅对充值分类调用失败处理，避免误伤其他类型
+    if category == "recharge" {
+        recharge_service
+            .handle_payment_failure_webhook(payment_intent.id.as_ref(), user_id)
+            .await?;
+    }
 
     Ok(())
 }
@@ -293,10 +314,12 @@ async fn handle_payment_intent_canceled(
         )
         .await;
 
-    // 调用recharge_service处理支付取消
-    recharge_service
-        .handle_payment_canceled_webhook(payment_intent.id.as_ref(), user_id)
-        .await?;
+    // 仅对充值分类调用取消处理
+    if category == "recharge" {
+        recharge_service
+            .handle_payment_canceled_webhook(payment_intent.id.as_ref(), user_id)
+            .await?;
+    }
 
     Ok(())
 }
