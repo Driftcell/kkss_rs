@@ -135,6 +135,20 @@ impl MembershipService {
         .await
         .ok();
 
+        // 记录 unified stripe transaction（创建阶段）
+        let _ = self
+            .stx_service
+            .record_payment_intent(
+                user_id,
+                StripeTransactionCategory::Membership,
+                &payment_intent_id,
+                Some(amount),
+                Some("usd".to_string()),
+                Some(format!("{:?}", payment_intent.status)),
+                payment_intent.description.clone(),
+            )
+            .await;
+
         Ok(CreateMembershipIntentResponse {
             payment_intent_id,
             client_secret: checkout
