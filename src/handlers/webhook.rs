@@ -1,9 +1,11 @@
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
 use crate::services::recharge_service::RechargeService;
+use crate::services::stripe_transaction_service::StripeTransactionService;
+use crate::entities::StripeTransactionStatus;
 use actix_web::{HttpRequest, HttpResponse, Result, web};
 use log::{error, info, warn};
-use stripe::{Event, EventObject, EventType, PaymentIntent};
+use stripe::{Event, EventObject, EventType, PaymentIntent, Invoice, Subscription};
 
 /// Stripe webhook处理器
 ///
@@ -13,6 +15,7 @@ pub async fn stripe_webhook(
     body: web::Bytes,
     stripe_service: web::Data<StripeService>,
     recharge_service: web::Data<RechargeService>,
+    stripe_transaction_service: web::Data<StripeTransactionService>,
 ) -> Result<HttpResponse> {
     let signature = match req.headers().get("stripe-signature") {
         Some(sig) => sig.to_str().unwrap_or(""),
@@ -46,7 +49,7 @@ pub async fn stripe_webhook(
     );
 
     // 处理不同类型的事件
-    match handle_stripe_event(event, &recharge_service).await {
+    match handle_stripe_event(event, &recharge_service, &stripe_transaction_service).await {
         Ok(_) => {
             info!("Successfully processed webhook event");
             Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -65,16 +68,29 @@ pub async fn stripe_webhook(
 }
 
 /// 处理具体的Stripe事件
-async fn handle_stripe_event(event: Event, recharge_service: &RechargeService) -> AppResult<()> {
+async fn handle_stripe_event(
+    event: Event,
+    recharge_service: &RechargeService,
+    stripe_transaction_service: &StripeTransactionService,
+) -> AppResult<()> {
     match event.type_ {
         EventType::PaymentIntentSucceeded => {
-            handle_payment_intent_succeeded(event, recharge_service).await
+            handle_payment_intent_succeeded(event, recharge_service, stripe_transaction_service).await
         }
         EventType::PaymentIntentPaymentFailed => {
-            handle_payment_intent_failed(event, recharge_service).await
+            handle_payment_intent_failed(event, recharge_service, stripe_transaction_service).await
         }
         EventType::PaymentIntentCanceled => {
-            handle_payment_intent_canceled(event, recharge_service).await
+            handle_payment_intent_canceled(event, recharge_service, stripe_transaction_service).await
+        }
+        EventType::InvoicePaymentSucceeded => {
+            handle_invoice_payment_succeeded(event, stripe_transaction_service).await
+        }
+        EventType::InvoicePaymentFailed => {
+            handle_invoice_payment_failed(event, stripe_transaction_service).await
+        }
+        EventType::CustomerSubscriptionDeleted => {
+            handle_subscription_deleted(event, stripe_transaction_service).await
         }
         _ => {
             info!("Unhandled event type: {:?}", event.type_);
@@ -87,12 +103,21 @@ async fn handle_stripe_event(event: Event, recharge_service: &RechargeService) -
 async fn handle_payment_intent_succeeded(
     event: Event,
     recharge_service: &RechargeService,
+    stripe_transaction_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
-
     info!("Payment succeeded for PaymentIntent: {}", payment_intent.id);
 
-    // 获取用户ID从metadata
+    // Update transaction status in new system
+    if let Err(e) = stripe_transaction_service
+        .update_transaction_status(&payment_intent.id, StripeTransactionStatus::Succeeded)
+        .await
+    {
+        warn!("Failed to update transaction status in new system: {}", e);
+        // Continue with legacy system
+    }
+
+    // Get user ID from metadata (legacy system)
     let user_id = payment_intent
         .metadata
         .get("user_id")
@@ -101,7 +126,7 @@ async fn handle_payment_intent_succeeded(
             AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
         })?;
 
-    // 调用recharge_service处理支付成功
+    // Handle legacy recharge webhook
     recharge_service
         .handle_payment_success_webhook(payment_intent.id.as_ref(), user_id)
         .await?;
@@ -113,12 +138,20 @@ async fn handle_payment_intent_succeeded(
 async fn handle_payment_intent_failed(
     event: Event,
     recharge_service: &RechargeService,
+    stripe_transaction_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
-
     warn!("Payment failed for PaymentIntent: {}", payment_intent.id);
 
-    // 获取用户ID从metadata
+    // Update transaction status in new system
+    if let Err(e) = stripe_transaction_service
+        .update_transaction_status(&payment_intent.id, StripeTransactionStatus::Failed)
+        .await
+    {
+        warn!("Failed to update transaction status in new system: {}", e);
+    }
+
+    // Get user ID from metadata (legacy system)
     let user_id = payment_intent
         .metadata
         .get("user_id")
@@ -127,7 +160,7 @@ async fn handle_payment_intent_failed(
             AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
         })?;
 
-    // 调用recharge_service处理支付失败
+    // Handle legacy recharge webhook
     recharge_service
         .handle_payment_failure_webhook(payment_intent.id.as_ref(), user_id)
         .await?;
@@ -139,12 +172,20 @@ async fn handle_payment_intent_failed(
 async fn handle_payment_intent_canceled(
     event: Event,
     recharge_service: &RechargeService,
+    stripe_transaction_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
-
     info!("Payment canceled for PaymentIntent: {}", payment_intent.id);
 
-    // 获取用户ID从metadata
+    // Update transaction status in new system
+    if let Err(e) = stripe_transaction_service
+        .update_transaction_status(&payment_intent.id, StripeTransactionStatus::Canceled)
+        .await
+    {
+        warn!("Failed to update transaction status in new system: {}", e);
+    }
+
+    // Get user ID from metadata (legacy system)
     let user_id = payment_intent
         .metadata
         .get("user_id")
@@ -153,7 +194,7 @@ async fn handle_payment_intent_canceled(
             AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
         })?;
 
-    // 调用recharge_service处理支付取消
+    // Handle legacy recharge webhook
     recharge_service
         .handle_payment_canceled_webhook(payment_intent.id.as_ref(), user_id)
         .await?;
@@ -169,6 +210,71 @@ fn extract_payment_intent_from_event(event: Event) -> AppResult<PaymentIntent> {
             "Event does not contain a PaymentIntent object".to_string(),
         )),
     }
+}
+
+/// 从事件中提取Invoice对象
+fn extract_invoice_from_event(event: Event) -> AppResult<Invoice> {
+    match event.data.object {
+        EventObject::Invoice(invoice) => Ok(invoice),
+        _ => Err(AppError::ValidationError(
+            "Event does not contain an Invoice object".to_string(),
+        )),
+    }
+}
+
+/// 从事件中提取Subscription对象
+fn extract_subscription_from_event(event: Event) -> AppResult<Subscription> {
+    match event.data.object {
+        EventObject::Subscription(subscription) => Ok(subscription),
+        _ => Err(AppError::ValidationError(
+            "Event does not contain a Subscription object".to_string(),
+        )),
+    }
+}
+
+/// 处理发票支付成功事件 (用于月卡订阅)
+async fn handle_invoice_payment_succeeded(
+    event: Event,
+    _stripe_transaction_service: &StripeTransactionService,
+) -> AppResult<()> {
+    let invoice = extract_invoice_from_event(event)?;
+    info!("Invoice payment succeeded: {}", invoice.id);
+
+    // TODO: Handle subscription billing success
+    // For now, just log the event
+    info!("Monthly subscription payment successful for invoice: {}", invoice.id);
+
+    Ok(())
+}
+
+/// 处理发票支付失败事件
+async fn handle_invoice_payment_failed(
+    event: Event,
+    _stripe_transaction_service: &StripeTransactionService,
+) -> AppResult<()> {
+    let invoice = extract_invoice_from_event(event)?;
+    warn!("Invoice payment failed: {}", invoice.id);
+
+    // TODO: Handle subscription billing failure
+    // This might require pausing the month card benefits
+    warn!("Monthly subscription payment failed for invoice: {}", invoice.id);
+
+    Ok(())
+}
+
+/// 处理订阅删除事件
+async fn handle_subscription_deleted(
+    event: Event,
+    _stripe_transaction_service: &StripeTransactionService,
+) -> AppResult<()> {
+    let subscription = extract_subscription_from_event(event)?;
+    info!("Subscription deleted: {}", subscription.id);
+
+    // TODO: Mark month card as inactive
+    // This should deactivate the user's month card
+    info!("Subscription deleted, should deactivate month card: {}", subscription.id);
+
+    Ok(())
 }
 
 /// 配置webhook路由
