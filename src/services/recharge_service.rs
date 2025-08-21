@@ -1,6 +1,7 @@
 use crate::entities::{
     RechargeStatus, TransactionType, recharge_record_entity as rr,
     sweet_cash_transaction_entity as sct, user_entity as users,
+    stripe_transaction_entity as st, StripeTransactionStatus, StripeTransactionType,
 };
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
@@ -12,6 +13,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
+use serde_json::json;
 use stripe::PaymentIntentStatus;
 
 #[derive(Clone)]
@@ -69,6 +71,26 @@ impl RechargeService {
             bonus_amount: Set(bonus_amount),
             total_amount: Set(total_amount),
             status: Set(status),
+            ..Default::default()
+        }
+        .insert(&self.pool)
+        .await?;
+
+        // 创建新的 Stripe 交易记录
+        let metadata = json!({
+            "user_id": user_id,
+            "transaction_type": "recharge",
+            "bonus_amount": bonus_amount,
+            "total_amount": total_amount
+        });
+        
+        let _ = st::ActiveModel {
+            user_id: Set(user_id),
+            stripe_payment_intent_id: Set(payment_intent_id_str.clone()),
+            transaction_type: Set(StripeTransactionType::Recharge),
+            amount: Set(request.amount),
+            status: Set(StripeTransactionStatus::Pending),
+            metadata: Set(Some(metadata)),
             ..Default::default()
         }
         .insert(&self.pool)

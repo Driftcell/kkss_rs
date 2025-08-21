@@ -1,6 +1,6 @@
 use crate::entities::{
     CodeType, MemberType, MembershipPurchaseStatus, membership_purchase_entity as mp,
-    user_entity as users,
+    user_entity as users, stripe_transaction_entity as st, StripeTransactionStatus, StripeTransactionType,
 };
 use crate::error::{AppError, AppResult};
 use crate::external::StripeService;
@@ -10,6 +10,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
     Set, TransactionTrait,
 };
+use serde_json::json;
 use stripe::PaymentIntentStatus;
 
 #[derive(Clone)]
@@ -109,6 +110,26 @@ impl MembershipService {
         .insert(&self.pool)
         .await
         .ok();
+
+        // 创建新的 Stripe 交易记录
+        let metadata = json!({
+            "user_id": user_id,
+            "transaction_type": "membership",
+            "target_member_type": req.target_member_type,
+            "current_member_type": current
+        });
+        
+        let _ = st::ActiveModel {
+            user_id: Set(user_id),
+            stripe_payment_intent_id: Set(payment_intent_id.clone()),
+            transaction_type: Set(StripeTransactionType::Membership),
+            amount: Set(amount),
+            status: Set(StripeTransactionStatus::Pending),
+            metadata: Set(Some(metadata)),
+            ..Default::default()
+        }
+        .insert(&self.pool)
+        .await?;
 
         Ok(CreateMembershipIntentResponse {
             payment_intent_id,

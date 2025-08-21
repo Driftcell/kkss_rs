@@ -84,9 +84,11 @@ async fn main() -> std::io::Result<()> {
         discount_code_service.clone(),
     );
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
+    let stripe_transaction_service = StripeTransactionService::new(pool.clone(), stripe_service.clone());
     let membership_service_for_task = membership_service.clone();
     let birthday_reward_service = BirthdayRewardService::new(pool.clone());
     let birthday_reward_service_for_task = birthday_reward_service.clone();
+    let stripe_transaction_service_for_task = stripe_transaction_service.clone();
 
     // 启动后台定时同步任务 (每分钟同步最近一月订单与优惠码)
     {
@@ -153,6 +155,26 @@ async fn main() -> std::io::Result<()> {
         });
     }
 
+    // 启动月卡用户每日优惠券发放任务（每24小时运行一次）
+    {
+        tokio::spawn(async move {
+            loop {
+                match stripe_transaction_service_for_task.get_active_month_card_users().await {
+                    Ok(users) => {
+                        log::info!("Found {} active month card users for daily coupon generation", users.len());
+                        for user_id in users {
+                            // TODO: 这里需要集成优惠券服务来生成$5.5的优惠券
+                            log::debug!("Should generate $5.5 coupon for user {}", user_id);
+                        }
+                    },
+                    Err(e) => log::error!("Failed to get active month card users: {e:?}"),
+                }
+                // 每24小时执行一次
+                tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
+            }
+        });
+    }
+
     // 启动HTTP服务器
     log::info!(
         "Starting HTTP server at {}:{}",
@@ -172,6 +194,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(discount_code_service.clone()))
             .app_data(web::Data::new(recharge_service.clone()))
             .app_data(web::Data::new(membership_service.clone()))
+            .app_data(web::Data::new(stripe_transaction_service.clone()))
             .app_data(web::Data::new(birthday_reward_service.clone()))
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(sync_service.clone()))
@@ -184,7 +207,9 @@ async fn main() -> std::io::Result<()> {
                     .configure(handlers::order_config)
                     .configure(handlers::discount_code_config)
                     .configure(handlers::recharge_config)
-                    .configure(handlers::membership_config),
+                    .configure(handlers::membership_config)
+                    .configure(handlers::month_card_config)
+                    .configure(handlers::payment_config),
             )
     })
     .bind((config.server.host.as_str(), config.server.port))?

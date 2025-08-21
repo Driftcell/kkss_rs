@@ -15,6 +15,7 @@ use sea_orm::{DatabaseConnection, Set, TransactionTrait, IntoActiveModel};
 use serde_json::{json, Value};
 use stripe::PaymentIntentStatus;
 
+#[derive(Clone)]
 pub struct StripeTransactionService {
     pool: DatabaseConnection,
     stripe_service: StripeService,
@@ -176,7 +177,7 @@ impl StripeTransactionService {
         let metadata = transaction.metadata.as_ref()
             .ok_or_else(|| AppError::ValidationError("Missing transaction metadata".into()))?;
         
-        let is_subscription = metadata.get("is_subscription")
+        let _is_subscription = metadata.get("is_subscription")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
