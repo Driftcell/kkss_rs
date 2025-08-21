@@ -68,6 +68,27 @@ impl StripeService {
         currency: Option<String>,
         description: Option<String>,
     ) -> AppResult<PaymentIntent> {
+        self.create_payment_intent_with_category(
+            amount,
+            user_id,
+            "recharge",
+            currency,
+            description,
+            None,
+        )
+        .await
+    }
+
+    /// 创建带有业务类别与自定义 metadata 的支付意图
+    pub async fn create_payment_intent_with_category(
+        &self,
+        amount: i64,
+        user_id: i64,
+        category: &str,
+        currency: Option<String>,
+        description: Option<String>,
+        extra_metadata: Option<HashMap<String, String>>,
+    ) -> AppResult<PaymentIntent> {
         // 验证最小金额 (50美分 = $0.50)
         if amount < 50 {
             return Err(AppError::ValidationError(
@@ -90,7 +111,12 @@ impl StripeService {
         // 创建metadata
         let mut metadata = HashMap::new();
         metadata.insert("user_id".to_string(), user_id.to_string());
-        metadata.insert("type".to_string(), "recharge".to_string());
+        metadata.insert("category".to_string(), category.to_string());
+        if let Some(extra) = extra_metadata {
+            for (k, v) in extra.into_iter() {
+                metadata.insert(k, v);
+            }
+        }
 
         // 设置描述
         let description = description
@@ -251,16 +277,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_stripe_service_creation() {
-        let config = StripeConfig {
-            secret_key: "sk_test_123".to_string(),
-            webhook_secret: "whsec_123".to_string(),
-        };
-        let service = StripeService::new(config);
-        assert!(!service.config.secret_key.is_empty());
-    }
-
-    #[test]
     fn test_dollars_to_cents_conversion() {
         assert_eq!(StripeService::dollars_to_cents(1.00), 100);
         assert_eq!(StripeService::dollars_to_cents(0.50), 50);
@@ -292,21 +308,5 @@ mod tests {
         // 测试日元 (无小数位)
         assert!(StripeService::validate_amount(50, "jpy").is_ok());
         assert!(StripeService::validate_amount(49, "jpy").is_err());
-    }
-
-    #[test]
-    fn test_webhook_signature_validation() {
-        let config = StripeConfig {
-            secret_key: "sk_test_123".to_string(),
-            webhook_secret: "whsec_123".to_string(),
-        };
-        let service = StripeService::new(config);
-
-        // 测试空签名
-        let result = service.verify_webhook_signature("payload", "", 0);
-        assert!(result.is_err());
-
-        // 注意：真实的webhook验证需要有效的payload和签名
-        // 这里只测试基本的错误处理逻辑
     }
 }

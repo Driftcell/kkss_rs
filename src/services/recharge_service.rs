@@ -1,3 +1,4 @@
+use crate::entities::StripeTransactionCategory;
 use crate::entities::{
     RechargeStatus, TransactionType, recharge_record_entity as rr,
     sweet_cash_transaction_entity as sct, user_entity as users,
@@ -8,6 +9,7 @@ use crate::models::{
     ConfirmRechargeRequest, ConfirmRechargeResponse, CreatePaymentIntentResponse,
     PaginatedResponse, PaginationParams, RechargeQuery, RechargeRecordResponse,
 };
+use crate::services::StripeTransactionService;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
@@ -18,13 +20,16 @@ use stripe::PaymentIntentStatus;
 pub struct RechargeService {
     pool: DatabaseConnection,
     stripe_service: StripeService,
+    stx_service: StripeTransactionService,
 }
 
 impl RechargeService {
     pub fn new(pool: DatabaseConnection, stripe_service: StripeService) -> Self {
+        let stx_service = StripeTransactionService::new(pool.clone());
         Self {
             pool,
             stripe_service,
+            stx_service,
         }
     }
 
@@ -47,15 +52,17 @@ impl RechargeService {
         // 创建Stripe支付意图
         let payment_intent = self
             .stripe_service
-            .create_payment_intent(
+            .create_payment_intent_with_category(
                 request.amount,
                 user_id,
-                Some("usd".to_string()), // 使用美元作为默认货币
+                "recharge",
+                Some("usd".to_string()),
                 Some(format!(
                     "User {} recharges ${:.2}",
                     user_id,
                     request.amount as f64 / 100.0
                 )),
+                None,
             )
             .await?;
 
@@ -73,6 +80,20 @@ impl RechargeService {
         }
         .insert(&self.pool)
         .await?;
+
+        // 记录 unified stripe transaction
+        let _ = self
+            .stx_service
+            .record_payment_intent(
+                user_id,
+                StripeTransactionCategory::Recharge,
+                &payment_intent.id.to_string(),
+                Some(request.amount),
+                Some("usd".to_string()),
+                Some(format!("{:?}", payment_intent.status)),
+                payment_intent.description.clone(),
+            )
+            .await;
 
         Ok(CreatePaymentIntentResponse {
             payment_intent_id: payment_intent_id_str,

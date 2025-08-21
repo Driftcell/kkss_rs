@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::services::{MembershipService, RechargeService};
+use crate::services::{MembershipService, MonthlyCardService, RechargeService};
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, ResponseError, Result, web};
 use serde_json::json;
 
@@ -179,5 +179,132 @@ pub fn membership_config(cfg: &mut web::ServiceConfig) {
                 web::post().to(create_membership_payment_intent),
             )
             .route("/confirm", web::post().to(confirm_membership)),
+    );
+}
+
+#[utoipa::path(
+    post,
+    path = "/monthly-card/create-payment-intent",
+    tag = "monthly_card",
+    request_body = CreateMonthlyCardIntentRequest,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "创建月卡支付意图成功", body = CreateMonthlyCardIntentResponse),
+        (status = 401, description = "未授权"),
+        (status = 400, description = "请求参数错误")
+    )
+)]
+pub async fn create_monthly_card_payment_intent(
+    monthly_service: web::Data<MonthlyCardService>,
+    req: HttpRequest,
+    request: web::Json<CreateMonthlyCardIntentRequest>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+    match monthly_service
+        .create_monthly_card_intent(user_id, request.into_inner())
+        .await
+    {
+        Ok(resp) => Ok(HttpResponse::Ok().json(json!({"success": true, "data": resp}))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/monthly-card/confirm",
+    tag = "monthly_card",
+    request_body = ConfirmMonthlyCardRequest,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "确认月卡支付成功", body = ConfirmMonthlyCardResponse),
+        (status = 401, description = "未授权"),
+        (status = 400, description = "请求参数错误")
+    )
+)]
+pub async fn confirm_monthly_card(
+    monthly_service: web::Data<MonthlyCardService>,
+    req: HttpRequest,
+    request: web::Json<ConfirmMonthlyCardRequest>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+    match monthly_service
+        .confirm_monthly_card(user_id, request.into_inner())
+        .await
+    {
+        Ok(resp) => Ok(HttpResponse::Ok().json(json!({"success": true, "data": resp}))),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct UnifiedConfirmRequest {
+    pub category: String,
+    pub payment_intent_id: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/payments/confirm",
+    tag = "payments",
+    request_body = UnifiedConfirmRequest,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "统一确认成功"),
+        (status = 400, description = "请求参数错误")
+    )
+)]
+pub async fn confirm_unified(
+    recharge_service: web::Data<RechargeService>,
+    membership_service: web::Data<MembershipService>,
+    monthly_service: web::Data<MonthlyCardService>,
+    req: HttpRequest,
+    body: web::Json<UnifiedConfirmRequest>,
+) -> Result<HttpResponse> {
+    let user_id = get_user_id_from_request(&req).unwrap_or(0);
+    let payload = body.into_inner();
+    let resp = match payload.category.as_str() {
+        "recharge" => serde_json::to_value(
+            recharge_service
+                .confirm_recharge(
+                    user_id,
+                    ConfirmRechargeRequest {
+                        payment_intent_id: payload.payment_intent_id,
+                    },
+                )
+                .await?,
+        )?,
+        "membership" => serde_json::to_value(
+            membership_service
+                .confirm_membership(
+                    user_id,
+                    ConfirmMembershipRequest {
+                        payment_intent_id: payload.payment_intent_id,
+                    },
+                )
+                .await?,
+        )?,
+        "monthly_card" => serde_json::to_value(
+            monthly_service
+                .confirm_monthly_card(
+                    user_id,
+                    ConfirmMonthlyCardRequest {
+                        payment_intent_id: payload.payment_intent_id,
+                    },
+                )
+                .await?,
+        )?,
+        _ => return Ok(HttpResponse::BadRequest().json(json!({"error": "invalid category"}))),
+    };
+    Ok(HttpResponse::Ok().json(json!({"success": true, "data": resp})))
+}
+
+pub fn monthly_card_config(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/monthly-card")
+            .route(
+                "/create-payment-intent",
+                web::post().to(create_monthly_card_payment_intent),
+            )
+            .route("/confirm", web::post().to(confirm_monthly_card)),
     );
 }

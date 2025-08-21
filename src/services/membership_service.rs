@@ -1,3 +1,4 @@
+use crate::entities::StripeTransactionCategory;
 use crate::entities::{
     CodeType, MemberType, MembershipPurchaseStatus, membership_purchase_entity as mp,
     user_entity as users,
@@ -5,7 +6,7 @@ use crate::entities::{
 use crate::error::{AppError, AppResult};
 use crate::external::StripeService;
 use crate::models::*;
-use crate::services::DiscountCodeService;
+use crate::services::{DiscountCodeService, StripeTransactionService};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
     Set, TransactionTrait,
@@ -17,6 +18,7 @@ pub struct MembershipService {
     pool: DatabaseConnection,
     stripe_service: StripeService,
     discount_code_service: DiscountCodeService,
+    stx_service: StripeTransactionService,
 }
 
 impl MembershipService {
@@ -25,10 +27,12 @@ impl MembershipService {
         stripe_service: StripeService,
         discount_code_service: DiscountCodeService,
     ) -> Self {
+        let stx_service = StripeTransactionService::new(pool.clone());
         Self {
             pool,
             stripe_service,
             discount_code_service,
+            stx_service,
         }
     }
 
@@ -84,14 +88,16 @@ impl MembershipService {
 
         let payment_intent = self
             .stripe_service
-            .create_payment_intent(
+            .create_payment_intent_with_category(
                 amount,
                 user_id,
+                "membership",
                 Some("usd".to_string()),
                 Some(format!(
                     "User {} upgrade to {}",
                     user_id, req.target_member_type
                 )),
+                None,
             )
             .await?;
 
@@ -222,6 +228,20 @@ impl MembershipService {
         }
 
         txn.commit().await?;
+
+        // 记录统一交易表
+        let _ = self
+            .stx_service
+            .record_payment_intent(
+                user_id,
+                StripeTransactionCategory::Membership,
+                &req.payment_intent_id,
+                Some(rec.amount),
+                Some("usd".to_string()),
+                Some(format!("{:?}", payment_intent.status)),
+                Some(format!("Membership confirmed: {:?}", new_member_type)),
+            )
+            .await;
         rec.status = MembershipPurchaseStatus::Succeeded;
         let new_type = new_member_type;
         let resp = MembershipPurchaseRecordResponse::from(rec);

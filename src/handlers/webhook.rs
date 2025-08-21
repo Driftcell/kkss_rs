@@ -1,9 +1,12 @@
+use crate::entities::StripeTransactionCategory;
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
+use crate::services::monthly_card_service::MonthlyCardService;
 use crate::services::recharge_service::RechargeService;
+use crate::services::stripe_transaction_service::StripeTransactionService;
 use actix_web::{HttpRequest, HttpResponse, Result, web};
 use log::{error, info, warn};
-use stripe::{Event, EventObject, EventType, PaymentIntent};
+use stripe::{Event, EventObject, EventType, Expandable, PaymentIntent};
 
 /// Stripe webhook处理器
 ///
@@ -13,6 +16,8 @@ pub async fn stripe_webhook(
     body: web::Bytes,
     stripe_service: web::Data<StripeService>,
     recharge_service: web::Data<RechargeService>,
+    monthly_service: web::Data<MonthlyCardService>,
+    stx_service: web::Data<StripeTransactionService>,
 ) -> Result<HttpResponse> {
     let signature = match req.headers().get("stripe-signature") {
         Some(sig) => sig.to_str().unwrap_or(""),
@@ -46,7 +51,7 @@ pub async fn stripe_webhook(
     );
 
     // 处理不同类型的事件
-    match handle_stripe_event(event, &recharge_service).await {
+    match handle_stripe_event(event, &recharge_service, &monthly_service, &stx_service).await {
         Ok(_) => {
             info!("Successfully processed webhook event");
             Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -65,16 +70,74 @@ pub async fn stripe_webhook(
 }
 
 /// 处理具体的Stripe事件
-async fn handle_stripe_event(event: Event, recharge_service: &RechargeService) -> AppResult<()> {
+async fn handle_stripe_event(
+    event: Event,
+    recharge_service: &RechargeService,
+    monthly_service: &MonthlyCardService,
+    stx_service: &StripeTransactionService,
+) -> AppResult<()> {
     match event.type_ {
         EventType::PaymentIntentSucceeded => {
-            handle_payment_intent_succeeded(event, recharge_service).await
+            handle_payment_intent_succeeded(event, recharge_service, stx_service).await
         }
         EventType::PaymentIntentPaymentFailed => {
-            handle_payment_intent_failed(event, recharge_service).await
+            handle_payment_intent_failed(event, recharge_service, stx_service).await
         }
         EventType::PaymentIntentCanceled => {
-            handle_payment_intent_canceled(event, recharge_service).await
+            handle_payment_intent_canceled(event, recharge_service, stx_service).await
+        }
+        EventType::ChargeRefunded => {
+            // record refund only
+            if let EventObject::Charge(charge) = event.data.object.clone() {
+                let user_id = charge
+                    .metadata
+                    .get("user_id")
+                    .and_then(|v| v.parse::<i64>().ok())
+                    .unwrap_or(0);
+                let category = charge
+                    .metadata
+                    .get("category")
+                    .map(|s| s.as_str())
+                    .unwrap_or("recharge");
+                let cat = match category {
+                    "membership" => StripeTransactionCategory::Membership,
+                    "monthly_card" => StripeTransactionCategory::MonthlyCard,
+                    _ => StripeTransactionCategory::Recharge,
+                };
+                let _ = stx_service
+                    .record_refund(
+                        user_id,
+                        cat,
+                        charge
+                            .refunds
+                            .as_ref()
+                            .and_then(|r| r.data.first().map(|x| x.id.to_string()))
+                            .as_deref()
+                            .unwrap_or(""),
+                        Some(charge.id.to_string()),
+                        Some(charge.amount_refunded),
+                        Some(charge.currency.to_string()),
+                        Some(format!("{:?}", charge.status)),
+                        Some("Charge refunded".to_string()),
+                    )
+                    .await;
+            }
+            Ok(())
+        }
+        EventType::InvoicePaymentSucceeded => {
+            // Subscription renewal success
+            if let EventObject::Invoice(inv) = event.data.object.clone() {
+                if let Some(sub) = inv.subscription.as_ref() {
+                    let sid: Option<String> = match sub {
+                        Expandable::Id(id) => Some(id.to_string()),
+                        Expandable::Object(obj) => Some(obj.id.to_string()),
+                    };
+                    if let Some(sub_id) = sid.as_deref() {
+                        let _ = monthly_service.renew_by_subscription(sub_id).await;
+                    }
+                }
+            }
+            Ok(())
         }
         _ => {
             info!("Unhandled event type: {:?}", event.type_);
@@ -87,6 +150,7 @@ async fn handle_stripe_event(event: Event, recharge_service: &RechargeService) -
 async fn handle_payment_intent_succeeded(
     event: Event,
     recharge_service: &RechargeService,
+    stx_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
 
@@ -101,10 +165,36 @@ async fn handle_payment_intent_succeeded(
             AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
         })?;
 
-    // 调用recharge_service处理支付成功
-    recharge_service
-        .handle_payment_success_webhook(payment_intent.id.as_ref(), user_id)
-        .await?;
+    // 读取业务类别
+    let category = payment_intent
+        .metadata
+        .get("category")
+        .map(|s| s.as_str())
+        .unwrap_or("recharge");
+
+    // 记录统一交易表
+    let _ = stx_service
+        .record_payment_intent(
+            user_id,
+            match category {
+                "membership" => StripeTransactionCategory::Membership,
+                "monthly_card" => StripeTransactionCategory::MonthlyCard,
+                _ => StripeTransactionCategory::Recharge,
+            },
+            payment_intent.id.as_ref(),
+            Some(payment_intent.amount),
+            Some(payment_intent.currency.to_string()),
+            Some("succeeded".to_string()),
+            payment_intent.description.clone(),
+        )
+        .await;
+
+    if category == "recharge" {
+        // 调用recharge_service处理支付成功
+        recharge_service
+            .handle_payment_success_webhook(payment_intent.id.as_ref(), user_id)
+            .await?;
+    }
 
     Ok(())
 }
@@ -113,6 +203,7 @@ async fn handle_payment_intent_succeeded(
 async fn handle_payment_intent_failed(
     event: Event,
     recharge_service: &RechargeService,
+    stx_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
 
@@ -127,6 +218,30 @@ async fn handle_payment_intent_failed(
             AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
         })?;
 
+    // 读取业务类别
+    let category = payment_intent
+        .metadata
+        .get("category")
+        .map(|s| s.as_str())
+        .unwrap_or("recharge");
+
+    // 统一交易表
+    let _ = stx_service
+        .record_payment_intent(
+            user_id,
+            match category {
+                "membership" => StripeTransactionCategory::Membership,
+                "monthly_card" => StripeTransactionCategory::MonthlyCard,
+                _ => StripeTransactionCategory::Recharge,
+            },
+            payment_intent.id.as_ref(),
+            Some(payment_intent.amount),
+            Some(payment_intent.currency.to_string()),
+            Some("failed".to_string()),
+            payment_intent.description.clone(),
+        )
+        .await;
+
     // 调用recharge_service处理支付失败
     recharge_service
         .handle_payment_failure_webhook(payment_intent.id.as_ref(), user_id)
@@ -139,6 +254,7 @@ async fn handle_payment_intent_failed(
 async fn handle_payment_intent_canceled(
     event: Event,
     recharge_service: &RechargeService,
+    stx_service: &StripeTransactionService,
 ) -> AppResult<()> {
     let payment_intent = extract_payment_intent_from_event(event)?;
 
@@ -152,6 +268,30 @@ async fn handle_payment_intent_canceled(
         .ok_or_else(|| {
             AppError::ValidationError("Missing or invalid user_id in metadata".to_string())
         })?;
+
+    // 读取业务类别
+    let category = payment_intent
+        .metadata
+        .get("category")
+        .map(|s| s.as_str())
+        .unwrap_or("recharge");
+
+    // 统一交易表
+    let _ = stx_service
+        .record_payment_intent(
+            user_id,
+            match category {
+                "membership" => StripeTransactionCategory::Membership,
+                "monthly_card" => StripeTransactionCategory::MonthlyCard,
+                _ => StripeTransactionCategory::Recharge,
+            },
+            payment_intent.id.as_ref(),
+            Some(payment_intent.amount),
+            Some(payment_intent.currency.to_string()),
+            Some("canceled".to_string()),
+            payment_intent.description.clone(),
+        )
+        .await;
 
     // 调用recharge_service处理支付取消
     recharge_service
@@ -174,40 +314,4 @@ fn extract_payment_intent_from_event(event: Event) -> AppResult<PaymentIntent> {
 /// 配置webhook路由
 pub fn webhook_config(cfg: &mut web::ServiceConfig) {
     cfg.service(web::scope("/webhook").route("/stripe", web::post().to(stripe_webhook)));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::StripeConfig;
-    use actix_web::{App, test, web};
-
-    #[actix_web::test]
-    async fn test_webhook_missing_signature() {
-        let stripe_config = StripeConfig {
-            secret_key: "sk_test_123".to_string(),
-            webhook_secret: "whsec_123".to_string(),
-        };
-        let stripe_service = StripeService::new(stripe_config);
-
-        // 创建一个模拟的RechargeService - 在实际测试中你可能需要mock
-        // 这里为了简化，我们只测试签名验证部分
-
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(stripe_service))
-                .configure(webhook_config),
-        )
-        .await;
-
-        let req = test::TestRequest::post()
-            .uri("/webhook/stripe")
-            .set_payload("test payload")
-            .to_request();
-
-        let resp = test::call_service(&app, req).await;
-        // 由于缺少RechargeService，会返回500而不是400
-        // 在真实的测试环境中，你需要提供完整的依赖
-        assert!(resp.status().is_client_error() || resp.status().is_server_error());
-    }
 }

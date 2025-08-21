@@ -1,6 +1,7 @@
 pub mod common;
 pub mod discount_code;
 pub mod membership_purchase;
+pub mod monthly_card;
 pub mod order;
 pub mod pagination;
 pub mod recharge_record;
@@ -11,6 +12,7 @@ pub mod wallet;
 pub use common::*;
 pub use discount_code::*;
 pub use membership_purchase::*;
+pub use monthly_card::*;
 pub use order::*;
 pub use pagination::*;
 pub use recharge_record::*;

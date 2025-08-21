@@ -33,15 +33,17 @@ impl OrderService {
             cond = cond.add(orders::Column::OrderStatus.eq(status));
         }
         if let Some(start_date) = &query.start_date
-            && let Ok(nd) = NaiveDate::parse_from_str(start_date, "%Y-%m-%d") {
-                let start_dt = Utc.from_utc_datetime(&nd.and_hms_opt(0, 0, 0).unwrap());
-                cond = cond.add(orders::Column::ExternalCreatedAt.gte(start_dt));
-            }
+            && let Ok(nd) = NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+        {
+            let start_dt = Utc.from_utc_datetime(&nd.and_hms_opt(0, 0, 0).unwrap());
+            cond = cond.add(orders::Column::ExternalCreatedAt.gte(start_dt));
+        }
         if let Some(end_date) = &query.end_date
-            && let Ok(nd) = NaiveDate::parse_from_str(end_date, "%Y-%m-%d") {
-                let end_dt = Utc.from_utc_datetime(&nd.and_hms_opt(23, 59, 59).unwrap());
-                cond = cond.add(orders::Column::ExternalCreatedAt.lte(end_dt));
-            }
+            && let Ok(nd) = NaiveDate::parse_from_str(end_date, "%Y-%m-%d")
+        {
+            let end_dt = Utc.from_utc_datetime(&nd.and_hms_opt(23, 59, 59).unwrap());
+            cond = cond.add(orders::Column::ExternalCreatedAt.lte(end_dt));
+        }
 
         let total = orders::Entity::find()
             .filter(cond.clone())

@@ -10,6 +10,8 @@ mod m20250816_000001_add_free_topping_code_type;
 mod m20250816_000002_add_birthday_rewards;
 mod m20250816_000003_add_birthday_mm_dd;
 mod m20250816_000004_convert_sct_transaction_type;
+mod m20250821_000005_add_stripe_transactions;
+mod m20250821_000006_add_monthly_cards;
 
 pub struct Migrator;
 
@@ -27,6 +29,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250816_000002_add_birthday_rewards::Migration),
             Box::new(m20250816_000003_add_birthday_mm_dd::Migration),
             Box::new(m20250816_000004_convert_sct_transaction_type::Migration),
+            Box::new(m20250821_000005_add_stripe_transactions::Migration),
+            Box::new(m20250821_000006_add_monthly_cards::Migration),
         ]
     }
 }

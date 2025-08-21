@@ -6,8 +6,11 @@ use utoipa::{
 };
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::entities::{CodeType, MemberType, RechargeStatus};
+use crate::entities::{
+    CodeType, MemberType, MonthlyCardPlanType, MonthlyCardStatus, RechargeStatus,
+};
 use crate::handlers;
+use crate::handlers::recharge::UnifiedConfirmRequest;
 use crate::models::*;
 
 struct SecurityAddon;
@@ -43,6 +46,9 @@ impl Modify for SecurityAddon {
         handlers::recharge::get_history,
         handlers::recharge::create_membership_payment_intent,
         handlers::recharge::confirm_membership,
+        handlers::recharge::create_monthly_card_payment_intent,
+        handlers::recharge::confirm_monthly_card,
+        handlers::recharge::confirm_unified,
     ),
     components(
         schemas(
@@ -80,6 +86,13 @@ impl Modify for SecurityAddon {
             ConfirmMembershipRequest,
             ConfirmMembershipResponse,
             ApiError,
+            MonthlyCardPlanType,
+            MonthlyCardStatus,
+            CreateMonthlyCardIntentRequest,
+            CreateMonthlyCardIntentResponse,
+            ConfirmMonthlyCardRequest,
+            ConfirmMonthlyCardResponse,
+            UnifiedConfirmRequest,
             PaginatedOrderResponse,
             AuthApiResponse,
             SendCodeApiResponse,
@@ -94,7 +107,9 @@ impl Modify for SecurityAddon {
         (name = "order", description = "Order management API"),
         (name = "discount", description = "Discount code API"),
         (name = "recharge", description = "Recharge API"),
-        (name = "membership", description = "Membership purchase API"),
+    (name = "membership", description = "Membership purchase API"),
+    (name = "monthly_card", description = "Monthly card API"),
+    (name = "payments", description = "Unified payments API"),
     ),
     info(
         title = "KKSS Backend API",

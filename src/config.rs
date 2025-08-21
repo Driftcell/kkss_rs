@@ -44,6 +44,12 @@ pub struct TwilioConfig {
 pub struct StripeConfig {
     pub secret_key: String,
     pub webhook_secret: String,
+    #[serde(default)]
+    pub monthly_card_product_id: Option<String>,
+    #[serde(default)]
+    pub monthly_card_one_time_price_id: Option<String>,
+    #[serde(default)]
+    pub monthly_card_subscription_price_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +125,13 @@ impl Config {
                     stripe: StripeConfig {
                         secret_key: get_env("STRIPE_SECRET_KEY").unwrap_or_default(),
                         webhook_secret: get_env("STRIPE_WEBHOOK_SECRET").unwrap_or_default(),
+                        monthly_card_product_id: get_env("STRIPE_MONTHLY_CARD_PRODUCT_ID"),
+                        monthly_card_one_time_price_id: get_env(
+                            "STRIPE_MONTHLY_CARD_ONE_TIME_PRICE_ID",
+                        ),
+                        monthly_card_subscription_price_id: get_env(
+                            "STRIPE_MONTHLY_CARD_SUBSCRIPTION_PRICE_ID",
+                        ),
                     },
                     sevencloud: SevenCloudConfig {
                         username: get_env("SEVENCLOUD_USERNAME").unwrap_or_default(),
@@ -143,27 +156,31 @@ impl Config {
             config.server.host = v;
         }
         if let Ok(v) = env::var("SERVER_PORT")
-            && let Ok(p) = v.parse() {
-                config.server.port = p;
-            }
+            && let Ok(p) = v.parse()
+        {
+            config.server.port = p;
+        }
         if let Ok(v) = env::var("DATABASE_URL") {
             config.database.url = v;
         }
         if let Ok(v) = env::var("DB_MAX_CONNECTIONS")
-            && let Ok(mc) = v.parse() {
-                config.database.max_connections = mc;
-            }
+            && let Ok(mc) = v.parse()
+        {
+            config.database.max_connections = mc;
+        }
         if let Ok(v) = env::var("JWT_SECRET") {
             config.jwt.secret = v;
         }
         if let Ok(v) = env::var("JWT_ACCESS_EXPIRES_IN")
-            && let Ok(n) = v.parse() {
-                config.jwt.access_token_expires_in = n;
-            }
+            && let Ok(n) = v.parse()
+        {
+            config.jwt.access_token_expires_in = n;
+        }
         if let Ok(v) = env::var("JWT_REFRESH_EXPIRES_IN")
-            && let Ok(n) = v.parse() {
-                config.jwt.refresh_token_expires_in = n;
-            }
+            && let Ok(n) = v.parse()
+        {
+            config.jwt.refresh_token_expires_in = n;
+        }
         if let Ok(v) = env::var("TWILIO_ACCOUNT_SID") {
             config.twilio.account_sid = v;
         }
@@ -181,6 +198,15 @@ impl Config {
         }
         if let Ok(v) = env::var("STRIPE_WEBHOOK_SECRET") {
             config.stripe.webhook_secret = v;
+        }
+        if let Ok(v) = env::var("STRIPE_MONTHLY_CARD_PRODUCT_ID") {
+            config.stripe.monthly_card_product_id = Some(v);
+        }
+        if let Ok(v) = env::var("STRIPE_MONTHLY_CARD_ONE_TIME_PRICE_ID") {
+            config.stripe.monthly_card_one_time_price_id = Some(v);
+        }
+        if let Ok(v) = env::var("STRIPE_MONTHLY_CARD_SUBSCRIPTION_PRICE_ID") {
+            config.stripe.monthly_card_subscription_price_id = Some(v);
         }
         if let Ok(v) = env::var("SEVENCLOUD_USERNAME") {
             config.sevencloud.username = v;
