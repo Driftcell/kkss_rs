@@ -1,14 +1,14 @@
 use crate::entities::StripeTransactionCategory;
 use crate::error::{AppError, AppResult};
 use crate::external::stripe::StripeService;
-use crate::services::monthly_card_service::MonthlyCardService;
+use crate::models::{ConfirmMembershipRequest, ConfirmMonthlyCardRequest};
 use crate::services::membership_service::MembershipService;
+use crate::services::monthly_card_service::MonthlyCardService;
 use crate::services::recharge_service::RechargeService;
 use crate::services::stripe_transaction_service::StripeTransactionService;
 use actix_web::{HttpRequest, HttpResponse, Result, web};
 use log::{error, info, warn};
 use stripe::{Event, EventObject, EventType, Expandable, PaymentIntent};
-use crate::models::{ConfirmMonthlyCardRequest, ConfirmMembershipRequest};
 
 /// Stripe webhook处理器
 ///
@@ -97,7 +97,7 @@ async fn handle_stripe_event(
                 membership_service,
                 stx_service,
             )
-                .await
+            .await
         }
         EventType::CheckoutSessionCompleted => {
             // 作为备用通道：当使用 Checkout Session 支付时，直接在完成事件里按分类处理
@@ -254,6 +254,11 @@ async fn handle_payment_intent_succeeded(
         .get("category")
         .map(|s| s.as_str())
         .unwrap_or("recharge");
+
+    info!(
+        "Dispatching PaymentIntentSucceeded for user_id={}, category={}",
+        user_id, category
+    );
 
     // 记录统一交易表
     let _ = stx_service

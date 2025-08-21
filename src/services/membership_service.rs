@@ -217,53 +217,58 @@ impl MembershipService {
             am.update(&txn).await?;
         }
 
-        // 发放福利（使用 DiscountCodeService 以保持统一逻辑 & 外部七云同步）
-        match new_member_type {
-            MemberType::SweetShareholder => {
-                // 1 个 $8 优惠码，有效期 1 个月
-                // 800 cents, code_type: ShareholderReward
-                self.discount_code_service
-                    .create_user_discount_code(user_id, 800, CodeType::ShareholderReward, 1)
-                    .await?;
-            }
-            MemberType::SuperShareholder => {
-                // 10 个 $3 优惠码，并发创建以减少等待时间（注意：部分失败不会回滚已成功的）
-                let mut handles = Vec::with_capacity(10);
-                for _ in 0..10 {
-                    let svc = self.discount_code_service.clone();
-                    handles.push(tokio::spawn(async move {
-                        svc.create_user_discount_code(
-                            user_id,
-                            300,
-                            CodeType::SuperShareholderReward,
-                            1,
-                        )
+        // 提交事务后再进行外部福利发放，避免长事务或潜在锁冲突
+        txn.commit().await?;
+
+        // 异步后台发放福利（不阻塞 webhook 返回）
+        let svc = self.discount_code_service.clone();
+        let mt_for_task = new_member_type.clone();
+        tokio::spawn(async move {
+            match mt_for_task {
+                MemberType::SweetShareholder => {
+                    if let Err(e) = svc
+                        .create_user_discount_code(user_id, 800, CodeType::ShareholderReward, 1)
                         .await
-                    }));
+                    {
+                        log::error!(
+                            "Failed to create shareholder reward code for user {user_id}: {e:?}"
+                        );
+                    }
                 }
-                for h in handles {
-                    match h.await {
-                        Ok(Ok(_id)) => {}
-                        Ok(Err(e)) => {
-                            log::error!(
-                                "Failed to create one of super shareholder discount codes: {e:?}"
-                            );
-                            return Err(e);
-                        }
-                        Err(join_err) => {
-                            return Err(AppError::InternalError(format!(
-                                "Join error creating discount codes: {join_err}"
-                            )));
+                MemberType::SuperShareholder => {
+                    let mut handles = Vec::with_capacity(10);
+                    for _ in 0..10 {
+                        let svc_in = svc.clone();
+                        handles.push(tokio::spawn(async move {
+                            svc_in
+                                .create_user_discount_code(
+                                    user_id,
+                                    300,
+                                    CodeType::SuperShareholderReward,
+                                    1,
+                                )
+                                .await
+                        }));
+                    }
+                    for h in handles {
+                        match h.await {
+                            Ok(Ok(_)) => {}
+                            Ok(Err(e)) => {
+                                log::error!(
+                                    "Failed to create one of super shareholder codes for user {user_id}: {e:?}"
+                                );
+                            }
+                            Err(join_err) => {
+                                log::error!(
+                                    "Join error creating super shareholder codes for user {user_id}: {join_err}"
+                                );
+                            }
                         }
                     }
                 }
+                MemberType::Fan => {}
             }
-            MemberType::Fan => {
-                unreachable!("Fan membership should not reach here")
-            }
-        }
-
-        txn.commit().await?;
+        });
 
         // 记录统一交易表
         let _ = self
@@ -281,6 +286,11 @@ impl MembershipService {
         rec.status = MembershipPurchaseStatus::Succeeded;
         let new_type = new_member_type;
         let resp = MembershipPurchaseRecordResponse::from(rec);
+        log::info!(
+            "Membership confirmed for user_id={}, new_type={:?}",
+            user_id,
+            new_type
+        );
         Ok(ConfirmMembershipResponse {
             membership_record: resp,
             new_member_type: new_type,
