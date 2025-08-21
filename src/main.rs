@@ -19,20 +19,20 @@ use kkss_backend::{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
-        .format(|buf, record| {
-            let ts = Local::now().format("%Y-%m-%dT%H:%M:%S%.3f%:z");
-            let level = record.level().as_str().to_ascii_lowercase();
-            let msg_json = serde_json::to_string(&format!("{}", record.args()))
-                .unwrap_or_else(|_| "\"<invalid utf8>\"".to_string());
-            writeln!(
-                buf,
-                "{{\"timestamp\":\"{}\",\"level\":\"{}\",\"message\":{},\"target\":\"{}\"}}",
-                ts,
-                level,
-                msg_json,
-                record.target(),
-            )
-        })
+        // .format(|buf, record| {
+        //     let ts = Local::now().format("%Y-%m-%dT%H:%M:%S%.3f%:z");
+        //     let level = record.level().as_str().to_ascii_lowercase();
+        //     let msg_json = serde_json::to_string(&format!("{}", record.args()))
+        //         .unwrap_or_else(|_| "\"<invalid utf8>\"".to_string());
+        //     writeln!(
+        //         buf,
+        //         "{{\"timestamp\":\"{}\",\"level\":\"{}\",\"message\":{},\"target\":\"{}\"}}",
+        //         ts,
+        //         level,
+        //         msg_json,
+        //         record.target(),
+        //     )
+        // })
         .target(Target::Stdout)
         .init();
 

@@ -5,10 +5,9 @@ use std::str::FromStr;
 use stripe::{
     CheckoutSession, CheckoutSessionMode, Client, CreateCheckoutSession,
     CreateCheckoutSessionLineItems, CreateCheckoutSessionLineItemsPriceData,
-    CreateCheckoutSessionLineItemsPriceDataProductData,
-    CreatePaymentIntent, CreatePaymentIntentAutomaticPaymentMethods,
-    CreateCheckoutSessionPaymentIntentData, Currency, Event, Expandable, PaymentIntent, PaymentIntentId,
-    Price as StripePrice, PriceId,
+    CreateCheckoutSessionLineItemsPriceDataProductData, CreateCheckoutSessionPaymentIntentData,
+    CreatePaymentIntent, CreatePaymentIntentAutomaticPaymentMethods, Currency, Event, Expandable,
+    PaymentIntent, PaymentIntentId, Price as StripePrice, PriceId,
 };
 
 /// Stripe服务，用于处理支付意图和webhook验证
@@ -65,22 +64,20 @@ impl StripeService {
         description: Option<String>,
         extra_metadata: Option<HashMap<String, String>>,
     ) -> AppResult<CheckoutInit> {
-        let success_url = self
-            .config
-            .checkout_success_url
-            .clone()
-            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_SUCCESS_URL".into()))?;
-        let cancel_url = self
-            .config
-            .checkout_cancel_url
-            .clone()
-            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_CANCEL_URL".into()))?;
+        let success_url =
+            self.config.checkout_success_url.clone().ok_or_else(|| {
+                AppError::InternalError("Missing STRIPE_CHECKOUT_SUCCESS_URL".into())
+            })?;
+        let cancel_url =
+            self.config.checkout_cancel_url.clone().ok_or_else(|| {
+                AppError::InternalError("Missing STRIPE_CHECKOUT_CANCEL_URL".into())
+            })?;
 
-    let mut create = CreateCheckoutSession::new();
-    let success_ref = success_url;
-    let cancel_ref = cancel_url;
-    create.success_url = Some(&success_ref);
-    create.cancel_url = Some(&cancel_ref);
+        let mut create = CreateCheckoutSession::new();
+        let success_ref = success_url;
+        let cancel_ref = cancel_url;
+        create.success_url = Some(&success_ref);
+        create.cancel_url = Some(&cancel_ref);
         create.mode = Some(CheckoutSessionMode::Payment);
         create.line_items = Some(vec![CreateCheckoutSessionLineItems {
             price: Some(price_id.to_string()),
@@ -96,9 +93,9 @@ impl StripeService {
                 meta.insert(k, v);
             }
         }
-    create.metadata = Some(meta.clone());
-    let client_ref = user_id.to_string();
-    create.client_reference_id = Some(&client_ref);
+        create.metadata = Some(meta.clone());
+        let client_ref = user_id.to_string();
+        create.client_reference_id = Some(&client_ref);
         create.payment_intent_data = Some(CreateCheckoutSessionPaymentIntentData {
             description: description,
             metadata: Some(meta),
@@ -107,9 +104,9 @@ impl StripeService {
 
         let session = CheckoutSession::create(&self.client, create)
             .await
-            .map_err(|e| AppError::ExternalApiError(format!(
-                "Failed to create checkout session: {e}"
-            )))?;
+            .map_err(|e| {
+                AppError::ExternalApiError(format!("Failed to create checkout session: {e}"))
+            })?;
         let url = session
             .url
             .ok_or_else(|| AppError::ExternalApiError("Missing checkout url".into()))?;
@@ -119,9 +116,11 @@ impl StripeService {
                 // 取回 PaymentIntent 以获取 client_secret
                 let pi = PaymentIntent::retrieve(&self.client, id, &[])
                     .await
-                    .map_err(|e| AppError::ExternalApiError(format!(
-                        "Failed to retrieve PaymentIntent after session create: {e}"
-                    )))?;
+                    .map_err(|e| {
+                        AppError::ExternalApiError(format!(
+                            "Failed to retrieve PaymentIntent after session create: {e}"
+                        ))
+                    })?;
                 (Some(id.to_string()), pi.client_secret)
             }
             Some(Expandable::Object(ref obj)) => {
@@ -150,16 +149,14 @@ impl StripeService {
         if amount < 50 {
             return Err(AppError::ValidationError("Minimum amount is $0.50".into()));
         }
-        let success_url = self
-            .config
-            .checkout_success_url
-            .clone()
-            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_SUCCESS_URL".into()))?;
-        let cancel_url = self
-            .config
-            .checkout_cancel_url
-            .clone()
-            .ok_or_else(|| AppError::InternalError("Missing STRIPE_CHECKOUT_CANCEL_URL".into()))?;
+        let success_url =
+            self.config.checkout_success_url.clone().ok_or_else(|| {
+                AppError::InternalError("Missing STRIPE_CHECKOUT_SUCCESS_URL".into())
+            })?;
+        let cancel_url =
+            self.config.checkout_cancel_url.clone().ok_or_else(|| {
+                AppError::InternalError("Missing STRIPE_CHECKOUT_CANCEL_URL".into())
+            })?;
 
         // 解析货币
         let currency = currency.unwrap_or_else(|| "usd".to_string());
@@ -209,9 +206,9 @@ impl StripeService {
         });
         let session = CheckoutSession::create(&self.client, create)
             .await
-            .map_err(|e| AppError::ExternalApiError(format!(
-                "Failed to create checkout session: {e}"
-            )))?;
+            .map_err(|e| {
+                AppError::ExternalApiError(format!("Failed to create checkout session: {e}"))
+            })?;
         let url = session
             .url
             .ok_or_else(|| AppError::ExternalApiError("Missing checkout url".into()))?;
@@ -219,9 +216,11 @@ impl StripeService {
             Some(Expandable::Id(ref id)) => {
                 let pi = PaymentIntent::retrieve(&self.client, id, &[])
                     .await
-                    .map_err(|e| AppError::ExternalApiError(format!(
-                        "Failed to retrieve PaymentIntent after session create: {e}"
-                    )))?;
+                    .map_err(|e| {
+                        AppError::ExternalApiError(format!(
+                            "Failed to retrieve PaymentIntent after session create: {e}"
+                        ))
+                    })?;
                 (Some(id.to_string()), pi.client_secret)
             }
             Some(Expandable::Object(ref obj)) => {

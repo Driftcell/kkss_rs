@@ -115,7 +115,10 @@ impl MonthlyCardService {
             .record_payment_intent(
                 user_id,
                 StripeTransactionCategory::MonthlyCard,
-                pi.id.as_ref(),
+                checkout
+                    .payment_intent_id
+                    .as_deref()
+                    .unwrap_or_else(|| pi.id.as_ref()),
                 Some(amount),
                 Some("usd".to_string()),
                 Some(format!("{:?}", pi.status)),

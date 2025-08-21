@@ -22,6 +22,11 @@ verify_service_sid = "VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 [stripe]
 secret_key = "sk_test_your-stripe-secret-key"
 webhook_secret = "whsec_your-webhook-secret"
+# The URLs that Stripe Checkout will redirect users to after payment success/cancel
+# You can also set them via env: STRIPE_CHECKOUT_SUCCESS_URL / STRIPE_CHECKOUT_CANCEL_URL
+# e.g., your frontend routes
+# checkout_success_url = "https://app.example.com/pay/success"
+# checkout_cancel_url = "https://app.example.com/pay/cancel"
 # Optional: monthly card product & price IDs if you sell a fixed product
 # STRIPE_MONTHLY_CARD_PRODUCT_ID corresponds to Product id like prod_...
 # STRIPE_MONTHLY_CARD_ONE_TIME_PRICE_ID corresponds to Price id for one-time purchase like price_...
