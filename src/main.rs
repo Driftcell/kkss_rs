@@ -5,6 +5,7 @@ use std::io::Write; // for env_logger custom formatter
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use kkss_backend::tasks;
 use kkss_backend::{
     config::Config,
     database::{create_pool, run_migrations},
@@ -90,93 +91,15 @@ async fn main() -> std::io::Result<()> {
     );
     let stripe_transaction_service = StripeTransactionService::new(pool.clone());
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
-    let membership_service_for_task = membership_service.clone();
     let birthday_reward_service = BirthdayRewardService::new(pool.clone());
-    let birthday_reward_service_for_task = birthday_reward_service.clone();
-    let monthly_card_service_for_task = monthly_card_service.clone();
 
-    // 启动后台定时同步任务 (每分钟同步最近一月订单与优惠码)
-    {
-        let sync_service_clone = sync_service.clone();
-        tokio::spawn(async move {
-            use chrono::Duration;
-            use chrono::Utc;
-            loop {
-                let now = Utc::now();
-                let start = now - Duration::days(30);
-                let start_date = start.format("%Y-%m-%d %H:%M:%S").to_string();
-                let end_date = format!("{} 23:59:59", now.format("%Y-%m-%d"));
-
-                log::debug!("Start syncing orders and discount codes: {start_date} ~ {end_date}");
-                // 同步订单
-                if let Err(e) = sync_service_clone.sync_orders(&start_date, &end_date).await {
-                    log::error!("Failed to sync orders: {e:?}");
-                }
-                // 同步优惠码
-                if let Err(e) = sync_service_clone.sync_discount_codes().await {
-                    log::error!("Failed to sync discount codes: {e:?}");
-                }
-                // 间隔 60 秒
-                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            }
-        });
-    }
-
-    // 启动会员过期检查任务（每 6 小时）
-    {
-        tokio::spawn(async move {
-            loop {
-                match membership_service_for_task.expire_memberships().await {
-                    Ok(n) => {
-                        if n > 0 {
-                            log::info!("Expired memberships processed: {n}");
-                        }
-                    }
-                    Err(e) => log::error!("Failed to expire memberships: {e:?}"),
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
-            }
-        });
-    }
-
-    // 启动生日福利发放任务（每小时运行一次，幂等保障一年一次）
-    {
-        tokio::spawn(async move {
-            loop {
-                match birthday_reward_service_for_task
-                    .grant_today_birthdays()
-                    .await
-                {
-                    Ok(n) => {
-                        if n > 0 {
-                            log::info!("Birthday rewards granted: {n}");
-                        }
-                    }
-                    Err(e) => log::error!("Failed to grant birthday rewards: {e:?}"),
-                }
-                // 每小时执行一次
-                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
-            }
-        });
-    }
-
-    // 启动月卡每日优惠券发放任务（每天运行一次，幂等保障一天一次）
-    {
-        tokio::spawn(async move {
-            loop {
-                match monthly_card_service_for_task.grant_daily_coupons().await {
-                    Ok(n) => {
-                        if n > 0 {
-                            log::info!("Monthly card daily coupons granted: {n}");
-                        }
-                    }
-                    Err(e) => log::error!("Failed to grant monthly card daily coupons: {e:?}"),
-                }
-                // 每天执行一次
-                tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
-            }
-        });
-    }
+    // 启动后台定时任务
+    tasks::spawn_all(
+        sync_service.clone(),
+        membership_service.clone(),
+        birthday_reward_service.clone(),
+        monthly_card_service.clone(),
+    );
 
     // 启动HTTP服务器
     log::info!(

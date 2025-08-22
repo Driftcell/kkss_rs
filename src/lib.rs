@@ -8,6 +8,7 @@ pub mod middlewares;
 pub mod models;
 pub mod services;
 pub mod swagger;
+pub mod tasks;
 pub mod utils;
 
 pub use config::Config;
