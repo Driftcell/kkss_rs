@@ -59,15 +59,15 @@ impl RechargeService {
                 "recharge",
                 Some("usd".to_string()),
                 Some(format!(
-                    "User {} recharges ${:.2}",
-                    user_id,
-                    request.amount as f64 / 100.0
+                    "Add Sweets Credits ${:.2}(include ${:.2} bonus)",
+                    total_amount as f64 / 100.0,
+                    bonus_amount as f64 / 100.0
                 )),
                 None,
             )
             .await?;
 
-        // 再创建 Checkout Session 获取官方页面地址
+        // 创建 Checkout Session 获取官方页面地址
         let checkout = self
             .stripe_service
             .create_checkout_session_for_amount(
@@ -76,9 +76,9 @@ impl RechargeService {
                 user_id,
                 "recharge",
                 Some(format!(
-                    "User {} recharges ${:.2}",
-                    user_id,
-                    request.amount as f64 / 100.0
+                    "Add Sweets Credits ${:.2}(include ${:.2} bonus)",
+                    total_amount as f64 / 100.0,
+                    bonus_amount as f64 / 100.0
                 )),
                 None,
             )
