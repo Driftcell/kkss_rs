@@ -119,31 +119,24 @@ impl AuthService {
         // 密码哈希
         let password_hash = hash_password(&request.password)?;
 
-        // 处理推荐人，要求推荐人不是 fan
-        let (referrer_id, referrer_is_paid, member_type) =
-            if let Some(referrer_code) = &request.referrer_code {
-                let ref_row = users::Entity::find()
-                    .filter(users::Column::ReferralCode.eq(referrer_code.clone()))
-                    .one(&self.pool)
-                    .await?;
+        // 处理推荐人
+        let (referrer_id, _, member_type) = if let Some(referrer_code) = &request.referrer_code {
+            let ref_row = users::Entity::find()
+                .filter(users::Column::ReferralCode.eq(referrer_code.clone()))
+                .one(&self.pool)
+                .await?;
 
-                if let Some(row) = ref_row {
-                    let rid = row.id;
-                    let rtype = row.member_type;
-                    if rtype == MemberType::Fan {
-                        return Err(AppError::ValidationError(
-                            "The referrer is not eligible (fan)".to_string(),
-                        ));
-                    }
-                    (Some(rid), true, MemberType::Fan)
-                } else {
-                    return Err(AppError::ValidationError(
-                        "The referrer does not exist".to_string(),
-                    ));
-                }
+            if let Some(row) = ref_row {
+                let rid = row.id;
+                (Some(rid), (), MemberType::Fan)
             } else {
-                (None, false, MemberType::Fan)
-            };
+                return Err(AppError::ValidationError(
+                    "The referrer does not exist".to_string(),
+                ));
+            }
+        } else {
+            (None, (), MemberType::Fan)
+        };
 
         // 生成推荐码
         let referral_code = generate_unique_referral_code(&self.pool).await?;
@@ -169,14 +162,22 @@ impl AuthService {
         .await?;
         let user_id = new_user.id;
 
-        // 如果存在推荐人且其为付费会员（非 Fan），发放 $0.5 Free Topping 优惠码（有效期 1 个月）
-        if referrer_is_paid
-            && let Err(e) = self
+        // 如果存在推荐人，双方都发放 $0.5 Free Topping 优惠码（有效期 1 个月）
+        if let Some(rid) = referrer_id {
+            if let Err(e) = self
                 .discount_code_service
                 .create_user_discount_code(user_id, 50, CodeType::FreeTopping, 1)
                 .await
-        {
-            log::error!("Failed to grant Free Topping coupon to new user {user_id}: {e:?}");
+            {
+                log::error!("Failed to grant Free Topping coupon to new user {user_id}: {e:?}");
+            }
+            if let Err(e) = self
+                .discount_code_service
+                .create_user_discount_code(rid, 50, CodeType::FreeTopping, 1)
+                .await
+            {
+                log::error!("Failed to grant Free Topping coupon to referrer {rid}: {e:?}");
+            }
         }
 
         // 生成JWT令牌
