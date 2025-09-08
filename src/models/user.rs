@@ -46,10 +46,12 @@ pub struct UserResponse {
     pub birthday: String,
     pub member_type: MemberType,
     pub membership_expires_at: Option<DateTime<Utc>>,
+    pub monthly_card_expires_at: Option<DateTime<Utc>>,
     pub balance: i64,
     pub stamps: i64,
     pub referral_code: Option<String>,
     pub total_referrals: i64,
+    pub is_monthly_card: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -105,10 +107,12 @@ impl From<user_entity::Model> for UserResponse {
             birthday: m.birthday.format("%Y-%m-%d").to_string(),
             member_type: m.member_type,
             membership_expires_at: m.membership_expires_at,
+            monthly_card_expires_at: None,
             balance: m.balance.unwrap_or(0),
             stamps: m.stamps.unwrap_or(0),
             referral_code: m.referral_code,
             total_referrals: 0,
+            is_monthly_card: false,
             created_at: m.created_at.unwrap_or_else(Utc::now),
         }
     }

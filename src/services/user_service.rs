@@ -1,6 +1,6 @@
 use crate::entities::{
-    discount_code_entity as discount_codes, order_entity as orders,
-    sweet_cash_transaction_entity as sct, user_entity as users,
+    discount_code_entity as discount_codes, monthly_card_entity as monthly_cards,
+    order_entity as orders, sweet_cash_transaction_entity as sct, user_entity as users,
 };
 use crate::error::{AppError, AppResult};
 use crate::models::*;
@@ -39,6 +39,17 @@ impl UserService {
 
         let mut user_response = UserResponse::from(user);
         user_response.total_referrals = total_referrals;
+
+        // 查询月卡状态与过期时间
+        let mc = monthly_cards::Entity::find()
+            .filter(monthly_cards::Column::UserId.eq(user_id))
+            .filter(monthly_cards::Column::Status.eq(monthly_cards::MonthlyCardStatus::Active))
+            .filter(monthly_cards::Column::EndsAt.gt(chrono::Utc::now()))
+            .order_by_desc(monthly_cards::Column::EndsAt)
+            .one(&self.pool)
+            .await?;
+        user_response.is_monthly_card = mc.is_some();
+        user_response.monthly_card_expires_at = mc.as_ref().and_then(|m| m.ends_at);
 
         Ok((user_response, statistics))
     }
