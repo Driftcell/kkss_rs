@@ -5,7 +5,7 @@ use crate::external::*;
 use crate::models::*;
 use crate::services::DiscountCodeService;
 use crate::utils::*;
-use chrono::Datelike;
+use chrono::{Datelike, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
     Set,
@@ -93,6 +93,12 @@ impl AuthService {
         // 解析生日
         let birthday = chrono::NaiveDate::parse_from_str(&request.birthday, "%Y-%m-%d")
             .map_err(|_| AppError::ValidationError("Invalid birthday format".to_string()))?;
+        // 验证生日不能是未来日期
+        if birthday > Utc::now().date_naive() {
+            return Err(AppError::ValidationError(
+                "Birthday cannot be in the future".to_string(),
+            ));
+        }
         let bmm: i16 = birthday.month() as i16;
         let bdd: i16 = birthday.day() as i16;
 
