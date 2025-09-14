@@ -336,18 +336,36 @@ impl LuckyDrawService {
                     .await?;
             }
             "Membership Monthly Card" => {
-                // 直接创建一条有效的月卡记录（plan_type 使用 one_time）
-                mc::ActiveModel {
-                    user_id: Set(user_id),
-                    plan_type: Set(MonthlyCardPlanType::OneTime),
-                    status: Set(MonthlyCardStatus::Active),
-                    starts_at: Set(Some(Utc::now())),
-                    ends_at: Set(Some(Utc::now() + Duration::days(30))),
-                    // 其它字段保持默认 (stripe_subscription_id, last_coupon_granted_on)
-                    ..Default::default()
+                // 月卡叠加策略:
+                // 若存在仍在有效期内的 Active 月卡, 将其 ends_at 顺延 30 天
+                // 否则创建新的月卡记录 (one_time)
+                let now = Utc::now();
+                if let Some(existing) = mc::Entity::find()
+                    .filter(mc::Column::UserId.eq(user_id))
+                    .filter(mc::Column::Status.eq(MonthlyCardStatus::Active))
+                    .filter(mc::Column::EndsAt.gte(now))
+                    .order_by_desc(mc::Column::EndsAt)
+                    .one(&self.pool)
+                    .await?
+                {
+                    // 顺延
+                    let base_end = existing.ends_at.unwrap_or(now);
+                    let mut am = existing.into_active_model();
+                    am.ends_at = Set(Some(base_end + Duration::days(30)));
+                    am.update(&self.pool).await?;
+                } else {
+                    // 创建新月卡
+                    mc::ActiveModel {
+                        user_id: Set(user_id),
+                        plan_type: Set(MonthlyCardPlanType::OneTime),
+                        status: Set(MonthlyCardStatus::Active),
+                        starts_at: Set(Some(now)),
+                        ends_at: Set(Some(now + Duration::days(30))),
+                        ..Default::default()
+                    }
+                    .insert(&self.pool)
+                    .await?;
                 }
-                .insert(&self.pool)
-                .await?;
             }
             "Thank You" => {
                 // 无奖励发放
