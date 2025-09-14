@@ -92,6 +92,7 @@ async fn main() -> std::io::Result<()> {
     let stripe_transaction_service = StripeTransactionService::new(pool.clone());
     let sync_service = SyncService::new(pool.clone(), sevencloud_api.clone());
     let birthday_reward_service = BirthdayRewardService::new(pool.clone());
+    let lucky_draw_service = LuckyDrawService::new(pool.clone(), discount_code_service.clone());
 
     // 启动后台定时任务
     tasks::spawn_all(
@@ -125,6 +126,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(stripe_transaction_service.clone()))
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(sync_service.clone()))
+            .app_data(web::Data::new(lucky_draw_service.clone()))
             .configure(swagger_config)
             .configure(handlers::webhook_config)
             .service(
@@ -135,6 +137,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(handlers::discount_code_config)
                     .configure(handlers::recharge_config)
                     .configure(handlers::membership_config)
+                    .configure(handlers::lucky_draw_config)
                     .configure(|cfg| {
                         handlers::recharge::monthly_card_config(cfg);
                     })

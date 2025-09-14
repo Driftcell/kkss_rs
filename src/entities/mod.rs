@@ -1,5 +1,8 @@
 pub mod birthday_rewards;
 pub mod discount_codes;
+pub mod lucky_draw_chances;
+pub mod lucky_draw_prizes;
+pub mod lucky_draw_records;
 pub mod membership_purchases;
 pub mod monthly_cards;
 pub mod orders;
@@ -10,6 +13,9 @@ pub mod users;
 
 pub use birthday_rewards as birthday_reward_entity;
 pub use discount_codes as discount_code_entity;
+pub use lucky_draw_chances as lucky_draw_chance_entity;
+pub use lucky_draw_prizes as lucky_draw_prize_entity;
+pub use lucky_draw_records as lucky_draw_record_entity;
 pub use membership_purchases as membership_purchase_entity;
 pub use monthly_cards as monthly_card_entity;
 pub use orders as order_entity;
