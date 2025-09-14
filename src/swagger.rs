@@ -49,6 +49,10 @@ impl Modify for SecurityAddon {
         handlers::recharge::create_monthly_card_payment_intent,
         handlers::recharge::confirm_monthly_card,
         handlers::recharge::confirm_unified,
+        handlers::lucky_draw::get_chances,
+        handlers::lucky_draw::get_prizes,
+        handlers::lucky_draw::get_records,
+        handlers::lucky_draw::spin,
     ),
     components(
         schemas(
@@ -98,6 +102,11 @@ impl Modify for SecurityAddon {
             SendCodeApiResponse,
             UserApiResponse,
             OrderListApiResponse,
+            LuckyDrawChancesResponse,
+            LuckyDrawPrizeResponse,
+            LuckyDrawRecordResponse,
+            LuckyDrawRecordQuery,
+            LuckyDrawSpinResponse,
         )
     ),
     modifiers(&SecurityAddon),
@@ -110,6 +119,7 @@ impl Modify for SecurityAddon {
     (name = "membership", description = "Membership purchase API"),
     (name = "monthly_card", description = "Monthly card API"),
     (name = "payments", description = "Unified payments API"),
+    (name = "lucky_draw", description = "Lucky draw wheel API"),
     ),
     info(
         title = "KKSS Backend API",
