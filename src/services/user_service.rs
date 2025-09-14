@@ -145,7 +145,7 @@ impl UserService {
         #[derive(Debug, sea_orm::FromQueryResult)]
         struct OrderStatsRow {
             total_orders: i64,
-            // SUM 在无记录时会返回 NULL，这里使用 Option 以避免解码错误
+            // SUM 在无记录时会返回 NULL，这里使用 Option 以避免解码错误；并将 SUM(price) 显式 cast 为 BIGINT 以避免 NUMERIC -> i64 解码问题
             total_spent: Option<i64>,
             total_earned_stamps: Option<i64>,
         }
@@ -153,9 +153,9 @@ impl UserService {
             .filter(orders::Column::UserId.eq(user_id))
             .select_only()
             .column_as(Expr::val(1).count(), "total_orders")
-            .column_as(Expr::col(orders::Column::Price).sum(), "total_spent")
+            .column_as(Expr::cust("SUM(price)::BIGINT"), "total_spent")
             .column_as(
-                Expr::col(orders::Column::StampsEarned).sum(),
+                Expr::cust("SUM(stamps_earned)::BIGINT"),
                 "total_earned_stamps",
             )
             .into_model::<OrderStatsRow>()
