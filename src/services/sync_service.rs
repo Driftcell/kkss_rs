@@ -1,6 +1,6 @@
 use crate::entities::{
-    MemberType, discount_code_entity as discount_codes, order_entity as orders,
-    sweet_cash_transaction_entity as sct, user_entity as users,
+    MemberType, discount_code_entity as discount_codes, lucky_draw_chance_entity as chances,
+    order_entity as orders, sweet_cash_transaction_entity as sct, user_entity as users,
 };
 use crate::error::AppResult;
 use crate::external::*;
@@ -77,6 +77,12 @@ impl SyncService {
             let created_at = chrono::DateTime::from_timestamp_millis(order_record.create_date)
                 .unwrap_or_default();
             let price_cents: i64 = (order_record.price.unwrap_or(0.0) * 100.0) as i64;
+            // 每满 $5.5 美元获得 1 次抽奖机会（按向下取整计算）
+            let spins_awarded: i64 = if price_cents > 0 {
+                price_cents / 550
+            } else {
+                0
+            };
 
             let _inserted_order = orders::ActiveModel {
                 id: Set(order_record.id),
@@ -207,13 +213,38 @@ impl SyncService {
                 }
             }
 
+            // 按消费金额发放抽奖机会（$5.5/次）
+            if spins_awarded > 0 {
+                if let Some(ldc) = chances::Entity::find()
+                    .filter(chances::Column::UserId.eq(user_id_db))
+                    .one(&txn)
+                    .await?
+                {
+                    let current_total = ldc.total_awarded;
+                    let mut am = ldc.into_active_model();
+                    am.total_awarded = Set(current_total + spins_awarded);
+                    am.updated_at = Set(Some(Utc::now()));
+                    am.update(&txn).await?;
+                } else {
+                    chances::ActiveModel {
+                        user_id: Set(user_id_db),
+                        total_awarded: Set(spins_awarded),
+                        total_used: Set(0),
+                        ..Default::default()
+                    }
+                    .insert(&txn)
+                    .await?;
+                }
+            }
+
             txn.commit().await?;
 
             log::info!(
-                "Successfully processed order: {}, User: {}, Stamps reward: {}",
+                "Successfully processed order: {}, User: {}, Stamps reward: {}, Spins awarded: {}",
                 order_record.id,
                 user_id_db,
-                1
+                1,
+                spins_awarded
             );
         } else {
             log::debug!(

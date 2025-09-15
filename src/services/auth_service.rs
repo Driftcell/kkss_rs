@@ -1,5 +1,5 @@
 use crate::entities::user_entity as users;
-use crate::entities::{CodeType, MemberType};
+use crate::entities::{CodeType, MemberType, lucky_draw_chance_entity as chances};
 use crate::error::{AppError, AppResult};
 use crate::external::*;
 use crate::models::*;
@@ -7,8 +7,8 @@ use crate::services::DiscountCodeService;
 use crate::utils::*;
 use chrono::{Datelike, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    PaginatorTrait, QueryFilter, Set,
 };
 
 #[derive(Clone)]
@@ -177,6 +177,36 @@ impl AuthService {
                 .await
             {
                 log::error!("Failed to grant Free Topping coupon to referrer {rid}: {e:?}");
+            }
+            // 推荐人获得一次抽奖机会（拉新任务）
+            match chances::Entity::find()
+                .filter(chances::Column::UserId.eq(rid))
+                .one(&self.pool)
+                .await
+            {
+                Ok(Some(ldc)) => {
+                    let current_total = ldc.total_awarded;
+                    let mut am = ldc.into_active_model();
+                    am.total_awarded = Set(current_total + 1);
+                    am.updated_at = Set(Some(Utc::now()));
+                    if let Err(e) = am.update(&self.pool).await {
+                        log::error!("Failed to award lucky draw chance to referrer {rid}: {e:?}");
+                    }
+                }
+                Ok(None) => {
+                    let am = chances::ActiveModel {
+                        user_id: Set(rid),
+                        total_awarded: Set(1),
+                        total_used: Set(0),
+                        ..Default::default()
+                    };
+                    if let Err(e) = am.insert(&self.pool).await {
+                        log::error!("Failed to init lucky draw chances for referrer {rid}: {e:?}");
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to query lucky draw chances for referrer {rid}: {e:?}");
+                }
             }
         }
 
