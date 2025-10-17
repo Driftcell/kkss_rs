@@ -1,8 +1,56 @@
 use crate::config::SevenCloudConfig;
 use crate::error::{AppError, AppResult};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+
+fn deserialize_flexible_date<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum FlexibleDate {
+        Timestamp(i64),
+        DateString(String),
+    }
+
+    match Option::<FlexibleDate>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(FlexibleDate::Timestamp(ts)) => Ok(Some(ts)),
+        Some(FlexibleDate::DateString(s)) => {
+            // Parse date string format "2025-10-17 10:34:22" to timestamp
+            chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+                .map(|dt| Some(dt.and_utc().timestamp_millis()))
+                .map_err(|e| Error::custom(format!("Failed to parse date string: {}", e)))
+        }
+    }
+}
+
+fn deserialize_flexible_date_required<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum FlexibleDate {
+        Timestamp(i64),
+        DateString(String),
+    }
+
+    match FlexibleDate::deserialize(deserializer)? {
+        FlexibleDate::Timestamp(ts) => Ok(ts),
+        FlexibleDate::DateString(s) => {
+            chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+                .map(|dt| dt.and_utc().timestamp_millis())
+                .map_err(|e| Error::custom(format!("Failed to parse date string: {}", e)))
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse<T> {
@@ -50,16 +98,43 @@ pub struct CouponsData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CouponRecord {
     pub id: i64,
-    #[serde(rename = "createDate")]
+    #[serde(rename = "adminId")]
+    pub admin_id: Option<String>,
+    #[serde(
+        rename = "createDate",
+        deserialize_with = "deserialize_flexible_date_required"
+    )]
     pub create_date: i64,
+    #[serde(rename = "userName")]
+    pub user_name: Option<String>,
+    #[serde(
+        rename = "modifyDate",
+        default,
+        deserialize_with = "deserialize_flexible_date"
+    )]
+    pub modify_date: Option<i64>,
     pub code: i64,
     #[serde(rename = "isUse")]
     pub is_use: String,
-    #[serde(rename = "useDate")]
+    #[serde(
+        rename = "useDate",
+        default,
+        deserialize_with = "deserialize_flexible_date"
+    )]
     pub use_date: Option<i64>,
     #[serde(rename = "useBy")]
     pub use_by: Option<String>,
+    #[serde(
+        rename = "lastUseDate",
+        default,
+        deserialize_with = "deserialize_flexible_date"
+    )]
+    pub last_use_date: Option<i64>,
     pub discount: f64,
+    #[serde(rename = "type")]
+    pub coupon_type: Option<String>,
+    #[serde(rename = "wxId")]
+    pub wx_id: Option<String>,
 }
 
 pub struct SevenCloudAPI {
