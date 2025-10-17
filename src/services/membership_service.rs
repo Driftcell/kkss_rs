@@ -44,17 +44,27 @@ impl MembershipService {
         }
     }
 
+    fn format_member_type(member_type: &MemberType) -> String {
+        match member_type {
+            MemberType::Fan => "Fan".to_string(),
+            MemberType::SweetShareholder => "Sweets Shareholder".to_string(),
+            MemberType::SuperShareholder => "Super Shareholder".to_string(),
+        }
+    }
+
     pub async fn create_membership_intent(
         &self,
         user_id: i64,
         req: CreateMembershipIntentRequest,
     ) -> AppResult<CreateMembershipIntentResponse> {
-        // 查询当前用户会员类型
-        let current: MemberType = users::Entity::find_by_id(user_id)
+        // 查询当前用户会员类型和用户名
+        let user = users::Entity::find_by_id(user_id)
             .one(&self.pool)
             .await?
-            .map(|u| u.member_type)
             .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+        let current = user.member_type.clone();
+        let username = user.username.clone();
 
         // 不允许降级或重复购买同级
         if current == req.target_member_type {
@@ -86,6 +96,9 @@ impl MembershipService {
         let amount = Self::membership_price_cents(&target_type)
             .ok_or_else(|| AppError::ValidationError("Unsupported target member type".into()))?;
 
+        let formatted_member_type = Self::format_member_type(&target_type);
+        let description = format!("{} upgrade to {}", username, formatted_member_type);
+
         let payment_intent = self
             .stripe_service
             .create_payment_intent_with_category(
@@ -93,10 +106,7 @@ impl MembershipService {
                 user_id,
                 "membership",
                 Some("usd".to_string()),
-                Some(format!(
-                    "User {} upgrade to {}",
-                    user_id, req.target_member_type
-                )),
+                Some(description.clone()),
                 None,
             )
             .await?;
@@ -109,10 +119,7 @@ impl MembershipService {
                 Some("usd".to_string()),
                 user_id,
                 "membership",
-                Some(format!(
-                    "User {} upgrade to {}",
-                    user_id, req.target_member_type
-                )),
+                Some(description.clone()),
                 None,
             )
             .await?;
